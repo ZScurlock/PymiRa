@@ -512,7 +512,7 @@ def process_chunk(input_dict, ref_seq, ids_ref, bwt_data, mismatches_5p=0, misma
     return test_dict, res_dict
 
 ##Main
-def main(file_path, ref_path, out_path, mismatches_5p=0, mismatches_3p=0):
+def main(file_path, ref_path, out_path, mismatches_5p=0, mismatches_3p=2):
     
     st = time.time()
     #Import and format the FASTA
