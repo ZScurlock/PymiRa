@@ -356,7 +356,7 @@ class DecimalCounter(Counter):
             self[elem] += increment
 
 
-def process_chunk(input_dict, ref_seq, ids_ref, bwt_data):
+def process_chunk(input_dict, ref_seq, ids_ref, bwt_data, mismatches_5p=0, mismatches_3p=2):
     """
     To be parallelised across cores for alignment and processing
     - Wrapper for find_v2 function
@@ -385,7 +385,7 @@ def process_chunk(input_dict, ref_seq, ids_ref, bwt_data):
     test_dict = DecimalCounter()
     for i in input_dict:
         read_counter +=1
-        res_dict[i] = (find_v2(input_dict[i], ref_seq, mismatches_5p=0,mismatches_3p=2, bwt_data=bwt_data))
+        res_dict[i] = (find_v2(input_dict[i], ref_seq, mismatches_5p=mismatches_5p,mismatches_3p=mismatches_3p, bwt_data=bwt_data))
         factor = 250000
         if read_counter % factor == 0:
             print(f"Aligned {read_counter} sequences...")
@@ -512,7 +512,7 @@ def process_chunk(input_dict, ref_seq, ids_ref, bwt_data):
     return test_dict, res_dict
 
 ##Main
-def main(file_path, ref_path, out_path):
+def main(file_path, ref_path, out_path, mismatches_5p=0, mismatches_3p=0):
     
     st = time.time()
     #Import and format the FASTA
@@ -558,7 +558,9 @@ def main(file_path, ref_path, out_path):
     #Alignment
     st = time.time()
     if __name__ == '__main__':
-        process_chunk2 = partial(process_chunk, ref_seq = clean_ref, ids_ref=ref_ids, bwt_data = required)
+        process_chunk2 = partial(process_chunk, ref_seq = clean_ref, 
+                                 ids_ref=ref_ids, bwt_data = required, mismatches_5p=mismatches_5p,
+                                 mismatches_3p=mismatches_3p)
         with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
             res_res = pool.map(process_chunk2, container)
 
