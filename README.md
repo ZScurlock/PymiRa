@@ -7,17 +7,20 @@ the miRNA hairpin FASTA file derived from miRBase can be used.
 # Usage
 PymiRa is available for use at this repository but also is available on our webserver found at XXXX.
 
+`python pymira.py fasta_path reference_path out_path`
+
 **Please note the webserver is intended for individual sample use. For larger experiments please install for your own use, thank you.**
 
 ## Input
 - FASTA file (ideally from small RNA-Sequencing experiment)
-- Reference FASTA file to align sncRNAs against. 
+- Reference FASTA file to align sncRNAs against.
+- Output file names
 
 ## Output
 - `.csv` file counts table of the alignments to the Reference FASTA file.
 - `.log` file recording the alignment of each read.
 
-By default, PymiRa allows up to two mismatches at the 3' end of a read.
+By default, PymiRa allows up to two mismatches at the 3' end of a read. If you wish to disable this feature, please set the `mismatches_3p` to `0` at your own discretion.
 
 
 - Counts table of the type and number 
