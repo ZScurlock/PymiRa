@@ -7,7 +7,7 @@ import multiprocessing
 import pandas as pd
 
 def main():
-    parser=argparse.ArgumentParser(description='Align a <input_fasta> against a <reference_fasta> file, to obtain a counts and log file.')
+    parser=argparse.ArgumentParser(description='Align an <input_fasta> against a <reference_fasta> file, to obtain a counts and log file.')
     parser.add_argument('--input_fasta',type=str,required=True,help='An input FASTA file to identify small RNAs from.')
     parser.add_argument('--ref_fasta',type=str,required=True,help='A reference FASTA file used to align the <input_fasta> against e.g. miRBase hairpin file for microRNA identification')
     parser.add_argument('--out_path', type=str, required=True,help='The dir and basename of the output files')
