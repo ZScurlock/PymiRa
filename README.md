@@ -4,7 +4,7 @@ PymiRa utilises a Burrows-Wheeler transformation algorithm to rapidly identify s
 This can be applied to identify different types of small non-coding RNAs by changing the reference FASTA file sequences are aligned to e.g. for microRNA identification (miRNAs), 
 the miRNA hairpin FASTA file derived from miRBase can be used.
 
-#Installation
+# Installation
 `pip install git+https://github.com/ZScurlock/PymiRa.git`
 
 # Usage
@@ -26,10 +26,11 @@ PymiRa is available for use at this repository but also is available on our webs
 
 By default, PymiRa allows up to two mismatches at the 3' end of a read. If you wish to disable this feature, please set the `mismatches_3p` to `0` at your own discretion.
 
-#All options
+## All options
+```
 usage: pymira [-h] --input_fasta INPUT_FASTA --ref_fasta REF_FASTA --out_path OUT_PATH [--num_proc NUM_PROC] [--mismatches_5p MISMATCHES_5P] [--mismatches_3p MISMATCHES_3P]
 
-Align a <input_fasta> against a <reference_fasta> file, to obtain a counts and log file.
+Align an <input_fasta> against a <reference_fasta> file, to obtain a counts and log file.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -43,4 +44,4 @@ optional arguments:
                         Number of mismatches allowed in the 5 prime part of a read (First 55 percent). Default is 0, change at your own discretion
   --mismatches_3p MISMATCHES_3P
                         Number of mismatches allowed in the 3 prime part of a read (Last 45 percent). Default is 2.
-
+```
