@@ -1,3 +1,16 @@
+Metadata-Version: 2.4
+Name: PymiRa
+Version: 0.1.0
+Summary: A rapid sequence aligner for small RNAs.
+Author-email: Zachary Scurlock <zs395@cam.ac.uk>
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy>=1.23.5
+Requires-Dist: pandas>=1.5.2
+Requires-Dist: partial>=1.0
+Dynamic: license-file
+
 # PymiRa - A rapid and accurate classification tool for small non-coding RNAs (sncRNA), including microRNAs
 PymiRa utilises a Burrows-Wheeler transformation algorithm to rapidly identify short reads against a reference FASTA file, written in Python.
 

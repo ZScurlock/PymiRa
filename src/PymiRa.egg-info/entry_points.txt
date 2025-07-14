@@ -1,0 +1,2 @@
+[console_scripts]
+pymira = PymiRa.cli:main
