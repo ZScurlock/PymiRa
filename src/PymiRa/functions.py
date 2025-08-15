@@ -4,7 +4,7 @@
 PymiRa - Version 1
 Created on Fri Mar 15 22:08:58 2024
 
-@author: zac
+@author: Zac Scurlock
 """
 import multiprocessing
 from collections import Counter
@@ -16,40 +16,6 @@ from bisect import bisect_left, bisect_right
 import time
 from functools import partial
 import sys
-#from memory_profiler import profile
-
-#file_path = sys.argv[1]
-#ref_path = sys.argv[2]
-#out_path = sys.argv[3]
-#num_proc = sys.argv[4]
-
-def import_fasta(input_path):
-    """
-    Imports a FASTA file storing the read IDs, the entire FASTA and the 
-    indexes of the IDs.
-    Parameters
-    ----------
-    input_path : string
-        Path to the FASTA file.
-
-    Returns
-    -------
-    rna_ids : List
-        List of read IDs
-    fasta : List
-        List of the entire FASTA
-    id_indexes : List
-        List of the ID indexes
-    """
-    with open(str(input_path)) as file:
-        fasta_raw = file.readlines()
-    fasta = [fasta_raw[x].replace('\n','') for x in range(len(fasta_raw))]
-    id_indexes = [i for i, s in enumerate(fasta) if '>' in s]
-    rna_ids = [fasta[x][1:] for x in id_indexes]
-    print(str(input_path) + ' has successfully been uploaded')
-
-    return rna_ids, fasta, id_indexes
-
 
 def parse_fasta(file_path):
     fasta_dict={}
@@ -61,15 +27,14 @@ def parse_fasta(file_path):
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            if line.startswith('>'):  # Header line
-                if sequence_lines:  # If there's a sequence already, save it
+            if line.startswith('>'):
+                if sequence_lines:
                     fasta_dict[read_name] = ''.join(sequence_lines).replace('U', 'T')
-                    sequence_lines = []  # Reset for the next sequence
-                read_name = line[1:] # Get the read name without '>'
-            else:  # Sequence line
-                sequence_lines.append(line)  # Collect sequence lines
-
-        # Save the last sequence if the file doesn't end with a header
+                    sequence_lines = []
+                read_name = line[1:] 
+            else:
+                sequence_lines.append(line)
+                
         if sequence_lines:
             fasta_dict[read_name] = ''.join(sequence_lines)
 
@@ -86,15 +51,12 @@ def split_fasta_dict(fasta_dict, X):
     if X < 1:
         raise ValueError("X must be at least 1")
 
-    # Calculate the size of each split
     total_sequences = len(fasta_dict)
     split_size = total_sequences // X
     remainder = total_sequences % X
 
-    # Prepare to store the results
     splits = []
 
-    # Iterate through the original dictionary and create splits
     read_names = list(fasta_dict.keys())  # Get the list of read names
     start_index = 0
 
@@ -102,13 +64,12 @@ def split_fasta_dict(fasta_dict, X):
         # Determine the size for the current split
         current_split_size = split_size + (1 if i < remainder else 0)
 
-        # Create a new dictionary for the current split
         split_dict = {read_names[j]: fasta_dict[read_names[j]]
                       for j in range(start_index, start_index + current_split_size)}
 
-        splits.append(split_dict)  # Append the current split to the list
+        splits.append(split_dict)
 
-        # Update the starting index for the next split
+        # Update the starting index 
         start_index += current_split_size
 
     return splits
@@ -247,7 +208,6 @@ def update(begin, end, letter, lf_map, counts, string_length):
     return(beginning,ending)
 
 
-
 def generate_all(input_string, s_array=None, eos="$"):
     letters = set(input_string)
     counts = count_occurences(input_string)
@@ -265,8 +225,6 @@ def generate_all(input_string, s_array=None, eos="$"):
 
 def find_all(string, pattern):
     """
-    
-
     Parameters
     ----------
     string : TYPE
@@ -457,9 +415,6 @@ class DecimalCounter(Counter):
 
 def process_chunk(input_dict, ref_seq, ids_ref, bwt_data, mismatches_5p=0, mismatches_3p=2):
     """
-    To be parallelised across cores for alignment and processing
-    - Wrapper for find_v2 function
-    
     Parameters
     ----------
     input_dict : dict
@@ -631,91 +586,3 @@ def process_chunk(input_dict, ref_seq, ids_ref, bwt_data, mismatches_5p=0, misma
 
     
     return test_dict, res_dict
-
-##Main
-#def main(file_path, ref_path, out_path, num_proc, mismatches_5p=0, mismatches_3p=2):
-#    num_proc = int(num_proc)
-#    st = time.time()
-#    #Import and format the FASTA
-#    input_file_ids, input_file_fasta, input_file_indexes = import_fasta(file_path)
-#    input_file_fasta = list(map(lambda x: x.replace('T', 'U'), input_file_fasta))
-#    
-#    #Split up the FASTA into chunks
-#    div_len = round(len(input_file_ids)/num_proc)
-#    iterators = list(range(0, len(input_file_ids), div_len+1))
-#    fasta_iterator = list(range(0, len(input_file_fasta), div_len+1))
-#    last = len(input_file_ids) - iterators[-1]
-#    counter = 0
-#    container=[]
-#    for lo in range(len(iterators)):
-#        #Bug when containers become empty.
-#        counter += 1
-#        if lo == len(iterators)-1:
-#            ref_ids_sub = input_file_ids[iterators[lo]:iterators[lo]+last]
-#            ref_fasta_sub = input_file_fasta[fasta_iterator[lo*2]:]
-#            ref_inds_sub = [i for i, s in enumerate(ref_fasta_sub) if '>' in s]
-#            ref_dict1 = format_fasta_dict(ref_ids_sub, ref_fasta_sub, ref_inds_sub)
-#            container.append(ref_dict1)
-#        else: 
-#            ref_ids_sub = input_file_ids[iterators[lo]:iterators[lo+1]]
-#            ref_fasta_sub = input_file_fasta[fasta_iterator[lo*2]:fasta_iterator[lo*2+2]]
-#            ref_inds_sub = [i for i, s in enumerate(ref_fasta_sub) if '>' in s]
-#            ref_dict1 = format_fasta_dict(ref_ids_sub, ref_fasta_sub, ref_inds_sub)
-#            container.append(ref_dict1)
-#    print(len(container))
-#    #Import and format the reference sequence (miRBase)
-#    ref_ids, ref_fasta, ref_inds = import_fasta(ref_path)
-#    ref_fasta = list(map(lambda x: x.replace('T', 'U'), ref_fasta))
-#    print('Generating reference..')
-#    ref_dict = format_fasta_dict(ref_ids, ref_fasta, ref_inds)
-#    ref = [' '.join(list(ref_dict.values()))]
-#    del ref_dict, ref_fasta, ref_inds
-#    clean_ref = re.sub(r'[^a-zA-Z\s]', '', str(ref))
-#    
-#    #BWT creation
-#    letters, bwt, lf_map, count, s_array  = generate_all(clean_ref)
-#    required = [letters,bwt,lf_map,count,s_array]   
-#    print('Reference creation:',round(time.time()-st,2), '(s)')    
-#    
-    #Alignment
-#    st = time.time()
-#    if __name__ == '__main__':
-#        process_chunk2 = partial(process_chunk, ref_seq = clean_ref, 
-#                                 ids_ref=ref_ids, bwt_data = required, mismatches_5p=mismatches_5p,
-#                                 mismatches_3p=mismatches_3p)
-#        with multiprocessing.Pool(processes=num_proc) as pool:
-#            res_res = pool.map(process_chunk2, container)
-
-    #Results processing - unpack - needs optimising
-#    emp = []
-#    for x in range(len(res_res)):
-#        if len(res_res[x][0]) > 0:
-#            emp.append(res_res[x][0])
-    
-#    final = emp[0]
-#    for merge in range(1,len(emp)):
-#        final.update(emp[merge])
-#    
-#    log={}
-#    for up in range(len(res_res)):
-#        log.update(res_res[up][1])
-    
-    #Creating read-alignment log file
-#    log_file = pd.DataFrame.from_dict(log, orient='index')
-#    log_file.to_csv(str(out_path + '_pymira_log.txt'), header=None)
-    
-    
-#    #Creating and formatting counts table
-#    results = pd.DataFrame.from_dict(final, orient='index')
-#    results.rename(columns={0:'Count'}, inplace=True)
-#    results = results.sort_values(by=['Count'], ascending=False)
-#    results.Count = results.Count.astype(int)
-#    results = results[results.Count>0]
-#    total = results.Count.sum()
-#    final_row = pd.DataFrame({'Count':total},index=['TotalCount'])
-#    results = pd.concat([results,final_row])
-#    results.index.name = file_path.split('/')[-1]
-#    print('Alignment and Processing:',time.time()-st)
-#    results.to_csv(str(out_path + '_pymira_counts.txt'))
-
-#main(file_path, ref_path, out_path, num_proc)
