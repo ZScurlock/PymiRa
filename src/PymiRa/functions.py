@@ -98,20 +98,7 @@ def to_int_keys_best3(l):
     seen=sorted(set(l))
     index={v:i for i,v in enumerate(seen)}
     return [index[v] for v in l]
-
-def suffix_array(s):
-
-    n = len(s)
-    k = 1
-    line = to_int_keys_best3(s)
-    while max(line) < n - 1:
-        line = to_int_keys_best3(
-            [a * (n + 1) + b + 1
-             for (a, b) in
-             zip_longest(line, islice(line, k, None),
-                         fillvalue=-1)])
-        k <<= 1
-    return line
+    
 
 def suffix_array3(s):
     n=len(s)
@@ -127,39 +114,6 @@ def suffix_array3(s):
         k<<=1
     return line
 
-def suffix_array2(s):
-    '''
-    Memory needed for this solution is 2*2n*64/8/1000000 mb
-    creates a super fast suffix array for a string in the following steps
-    1) convert the string to a list of numbers with the 'to_int_keys_best_new' function
-    2) since 'to_int_keys_best_new' returns the numbers [0, N] with N being the number of unique elements in the list,
-       we know that if the max element in that list is the size-1, each element in the list is unique and sorted.
-    3) iteratively update each element in the list of numbers using "a * (n + 1) + b + 1" where n is the size of 
-       the string to be sorted, a is the current number in the list at index i and b is the number in the list at index i+k
-       k is incremented according to 2**iteration. The idea behind this formula is that you try to find how many of the numbers
-       in the list you need to compare, in order to be able to sort it. We can increment k with 2**iteration since the number at 
-       each index becomes the stacked 'sorted value' which doubles every iteration.
-       The easiest way to see this is as a 'lego tower' start with a sequence of blocks.
-       See figure at the bottom of the page.
-    4) the np.unique function does the same as 'to_int_keys_best', but it only works for numpy arrays, but is much(!!!) faster.
-    5) if we want to improve for memory we can replace the prev and line bit with:
-        line[0:-k] = (n + 1) * line[0:-k] + line[k::] + 1
-        line[-k::] *= (n + 1)
-
-        however, that's arguibly less readable
-    '''
-    n = len(s)
-    k = 1
-    line = np.array(to_int_keys_best2(s), dtype='int64')    
-    prev = np.zeros(n, dtype='int64')
-    while line.max() < n - 1:
-        prev[-k::] = -1
-        prev[0:-k] = line[k::] + 1
-        line = (n + 1) * line + prev
-        k <<= 1
-        _, line = np.unique(line, return_inverse=True)
-    return line
-
 def inverse_array(l):
     n = len(l)
     ans = [0] * n
@@ -167,7 +121,6 @@ def inverse_array(l):
         ans[l[i]] = i
     return ans
 
-#np.zeros(len(input_string))
 
 def bwt_from_suffix(string, s_array=None):
     if s_array is None:
