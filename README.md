@@ -8,7 +8,7 @@ the miRNA hairpin FASTA file derived from miRBase can be used.
 `pip install git+https://github.com/ZScurlock/PymiRa.git`
 
 # Usage
-PymiRa is available for use at this repository but also is available on our webserver found at www.pymira.co.uk.
+PymiRa is available for use at this repository but also is available on our webserver found at http://www.pymira.co.uk.
 
 `pymira --input_fasta /path/to/input_fasta --ref_fasta /path/to/ref_fasta --out_path /path/to/results`
 
