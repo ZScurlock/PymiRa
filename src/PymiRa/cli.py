@@ -11,7 +11,7 @@ def main():
     parser.add_argument('--input_fasta',type=str,required=True,help='An input FASTA file to identify small RNAs from.')
     parser.add_argument('--ref_fasta',type=str,required=True,help='A reference FASTA file used to align the <input_fasta> against e.g. miRBase hairpin file for microRNA identification')
     parser.add_argument('--out_path', type=str, required=True,help='The dir and basename of the output files')
-    parser.add_argument('--num_proc', type=float, default=4,help='Number of processors to be used. Default is 4.')
+    parser.add_argument('--num_proc', type=int, default=4,help='Number of processors to be used. Default is 4.')
 
     parser.add_argument('--mismatches_5p', type=int, default=0, help='Number of mismatches allowed in the 5 prime part of a read (First 55 percent). Default is 0, change at your own discretion')
     parser.add_argument('--mismatches_3p',type=int,default=2, help='Number of mismatches allowed in the 3 prime part of a read (Last 45 percent). Default is 2.')
