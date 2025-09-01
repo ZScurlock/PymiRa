@@ -35,7 +35,7 @@ def main():
     input_file_dict, input_file_ids = pym.parse_fasta(args.input_fasta)
     #print(input_file_dict[list(input_file_dict.keys())[0]])
     #input_file_fasta = list(map(lambda x: x.replace('T', 'U'), input_file_fasta))
-    container = pym.split_fasta_dict(input_file_dict, args.num_proc)
+    container = pym.split_fasta_dict(input_file_dict, int(args.num_proc))
 
     #Import and format the reference sequence (miRBase)
     ref_dict, ref_ids  = pym.parse_fasta(args.ref_fasta)
