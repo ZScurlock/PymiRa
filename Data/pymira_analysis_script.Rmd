@@ -1,0 +1,511 @@
+---
+title: "pymira_analysis_script"
+author: "Zac Scurlock"
+date: "2025-05-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(VennDiagram)
+library(ggplot2)
+library(ggpubr)
+library(ggtern)
+library(tidyr)
+```
+
+```{r Custom theme}
+science_theme <- theme(
+  panel.background = element_rect(fill = "white", colour = NA),
+
+  axis.text = element_text(color = "#707070"),
+  axis.title = element_text(color = "#4E4F4F"),
+  
+  panel.grid.major = element_line(color = "#D7D6D6", linetype = "dashed", linewidth = 0.3),
+  panel.grid.minor = element_blank(),
+
+  axis.line.x = element_line(color = "#929292"),
+  axis.line.y = element_line(color='#929292'),
+  axis.ticks = element_line(color = "#929292", linewidth = 0.5)
+)
+
+```
+
+#Load in miRNA counts from different aligners
+```{r}
+bt2_names <- c('mirna', 'bt_count')
+bt2_d <- read.csv('BT2_10M_simulated_reads_consolidated_counts.txt', sep='\t')
+names(bt2_d) <- bt2_names
+bt2_d$mirna <- gsub('R', 'r',bt2_d$mirna)
+bt2_d <- head(bt2_d,nrow(bt2_d)-1)
+
+py <- read.csv('PY_10M_simulated_reads_counts.txt',sep='\t')
+py_names <- c('mirna', 'py_count')
+names(py) <- py_names
+py <- head(py,nrow(py)-1)
+
+chi <- read.csv('CHI_10M_simulated_reads_counts.txt',sep='\t')
+chi_names <- c('mirna', 'chi_count')
+names(chi) <- chi_names
+chi <- head(chi,nrow(chi)-1)
+
+
+real <- read.csv('real_simulated_mirna_counts.csv')
+names(real) <- c('mirna', 'real_count')
+
+
+
+##Clean the names of real miRNA
+temp <- c()
+for(i in seq(length(real$mirna))){
+  temp <- c(temp,gsub('>','',strsplit(real$mirna[i], split=' ')[[1]][1]))
+}
+
+temp <- gsub('R', 'r', temp)
+real$mirna <- temp
+```
+
+#Combine datasets into single DF
+```{r}
+comb <- merge(py, real, by='mirna', all=T)
+comb <- merge(comb, bt2_d, by='mirna',all=T)
+comb <- merge(comb, chi, by='mirna', all=T)
+comb[is.na(comb)] <- 0
+names(comb) <- c('mirna', 'PymiRa', 'Real', 'Bowtie2', 'Chimira')
+#Removes any that Real didn't have
+comb_filt <- comb[which(comb$Real>0),]
+comb = comb_filt
+
+comb_long <- gather(comb, key='Key', value='Value', -mirna)
+```
+
+
+
+##Figure 1 - Simulated all data - normalised - MiRNA counts normalised to the Real count
+```{r fig.width=8, fig.height=6}
+py_norm <- comb$PymiRa - comb$Real
+bt2_norm <- comb$Bowtie2 - comb$Real
+chi_norm <- comb$Chimira - comb$Real
+norm_data <- data.frame('mirna' = comb$mirna,
+                        'PymiRa'=py_norm,
+                        'Bowtie2'=bt2_norm,
+                        'Chimira'=chi_norm,
+                        'Real'=rep(0,nrow(comb)))
+
+comb$py_error <- abs(1-(comb$PymiRa/comb$Real))
+comb$chi_error <- abs(1-(comb$Chimira/comb$Real))
+comb$bt2_error <- abs(1-(comb$Bowtie2/comb$Real))
+
+
+norm_data_long <- gather(norm_data, key='Key', value='Value', -mirna)
+
+correlation <-data.frame(Key = c('PymiRa', 'Bowtie2', 'Chimira'),
+                         Corre = c(paste('r = ',round(cor(comb$Real, comb$PymiRa, use='complete.obs'),3)),
+                                   paste('r = ',round(cor(comb$Real, comb$Bowtie2, use='complete.obs'),3)), paste('r = ', round(cor(comb$Real, comb$Chimira, use='complete.obs'),3))))
+
+norm_data_long_2 <- norm_data_long[norm_data_long$Key != 'Real',]
+norm_data_long_2$Key <- factor(norm_data_long_2$Key,levels = c('Bowtie2', 'Chimira','PymiRa'))
+norm_data_long_2 <- norm_data_long_2 %>% mutate(mirna=factor(mirna, levels=unique(mirna)))
+highlight <- c(norm_data_long_2$mirna[grep('mir-548',norm_data_long_2$mirna)])
+ggplot(norm_data_long_2, aes(x=mirna, y=Value, group=Key, color=Key)) + 
+  geom_rect(data=norm_data_long_2[norm_data_long_2$mirna %in% highlight,],
+            aes(xmin=as.numeric(mirna)-0.5,
+                xmax=as.numeric(mirna)+0.5,
+                ymin=-Inf, ymax=Inf, fill='miR-548 family miRNAs'),alpha=0.2, color=NA, inherit.aes=F) +
+  scale_fill_manual(values=c('#f05d3e'), name=NULL) + 
+  guides(color=guide_legend(order=1)) + 
+  geom_line() + 
+  geom_text(data=correlation, aes(x=-Inf, y=Inf, label=Corre, hjust=-0.5, vjust=1.5), show.legend=F) + 
+  facet_wrap(~factor(Key,levels=c('Bowtie2', 'Chimira', 'PymiRa')), nrow=3) + science_theme + theme(panel.grid.major =element_blank(), axis.ticks.x = element_blank(), axis.text.x=element_blank(), strip.text = element_text(color='black', size=12)) + scale_colour_manual(values=c('#56B4E9','darkgreen', '#E69F00')) + labs(x='Individual counts for each miRNA', y='Normalised miRNA count', color='Aligner') + geom_abline(slope=0, col='red', linewidth=0.5) + scale_y_continuous(label=scales::comma)
+```
+#Pearson's R scores
+```{r}
+#Steiger's Z test
+#PymiRa vs Bt2
+library(cocor)
+cocor.dep.groups.overlap(r.jk=+0.9725, r.jh=+0.7934, r.kh=+0.8073, n=2632, alternative="greater", alpha=0.05, conf.level=0.95, null.value=0)
+
+```
+
+```{r}
+#Steiger's Z test
+#PymiRa vs Chimira
+library(cocor)
+cocor.dep.groups.overlap(r.jk=+0.9725, r.jh=+0.9615, r.kh=+0.9509, n=2632, alternative="greater", alpha=0.05, conf.level=0.95, null.value=0)
+
+```
+
+
+
+#Figure 2 - Ternary - Real, BT2 and Chimira
+```{r fig.width=8, fig.height=5}
+tern <- comb
+tern$py_error <- NULL
+tern$chi_error <- NULL
+tern$bt2_error <- NULL
+tern$mirna <- NULL
+
+real_bt2_chim <- tern
+real_bt2_chim$PymiRa <- NULL
+real_bt2_chim$sum <- rowSums(real_bt2_chim)
+
+real_bt2_chim[,1] <- real_bt2_chim[,1]/real_bt2_chim$sum
+real_bt2_chim[,2] <- real_bt2_chim[,2]/real_bt2_chim$sum
+real_bt2_chim[,3] <- real_bt2_chim[,3]/real_bt2_chim$sum
+
+
+ rbc<- ggtern(real_bt2_chim, aes(Bowtie2,Chimira, Real)) + geom_mask() + geom_point(color='black',size=1.5, shape=21)  + stat_density_tern(geom='polygon', n=200, aes(fill=..level..)) + 
+  scale_fill_gradient(low='blue',high='red') +
+  labs(T='Chimira', L='Bowtie2', R='Real',title='Real vs Bowtie2 vs Chimira', fill='Level') + 
+  theme_rgbw() +
+  theme_nogrid_minor() + theme_custom(col.T='darkgreen', col.L="#56B4E9", col.R='purple', tern.panel.background = 'white')+ theme_showarrows()
+ 
+```
+
+#Real Bt2 Pymira
+```{r}
+real_bt2_py <- tern
+real_bt2_py$Chimira <- NULL
+real_bt2_py$sum <- rowSums(real_bt2_py)
+
+real_bt2_py[,1] <- real_bt2_py[,1]/real_bt2_py$sum
+real_bt2_py[,2] <- real_bt2_py[,2]/real_bt2_py$sum
+real_bt2_py[,3] <- real_bt2_py[,3]/real_bt2_py$sum
+
+rbp <- ggtern(real_bt2_py, aes(Bowtie2, PymiRa, Real)) + geom_mask() + geom_point(color='black',size=1.5, shape=21) + stat_density_tern(geom='polygon', n=200, aes(fill=..level..)) + 
+  scale_fill_gradient(low='blue',high='red') +
+  labs(T='PymiRa', L='Bowtie2', R='Real',title='Real vs Bowtie2 vs PymiRa', fill='Level') + 
+  theme_rgbw() +
+  theme_nogrid_minor() + theme_custom(col.T='#E69F00', col.L="#56B4E9", col.R='purple', tern.panel.background = 'white') + theme_showarrows()
+```
+
+#Real Chimira Pymira
+```{r}
+real_chi_py <- tern
+real_chi_py$Bowtie2 <- NULL
+real_chi_py$sum <- rowSums(real_chi_py)
+
+real_chi_py[,1] <- real_chi_py[,1]/real_chi_py$sum
+real_chi_py[,2] <- real_chi_py[,2]/real_chi_py$sum
+real_chi_py[,3] <- real_chi_py[,3]/real_chi_py$sum
+
+rcp <- ggtern(real_chi_py, aes(Chimira, PymiRa, Real)) + geom_mask() + geom_point(color='black',size=1.5, shape=21) + stat_density_tern(geom='polygon', n=200, aes(fill=..level..)) + 
+  scale_fill_gradient(low='blue',high='red') +
+  labs(T='PymiRa', L='Chimira', R='Real',title='Real vs Chimira vs PymiRa', fill='Level') + 
+  theme_rgbw() +
+  theme_nogrid_minor() + theme_custom(col.T='#E69F00', col.L="darkgreen", col.R='purple', tern.panel.background = 'white') + theme_showarrows()
+```
+
+#Bowtie2 Chimira Pymira
+```{r}
+bt2_chi_py <- tern
+bt2_chi_py$Real<- NULL
+bt2_chi_py$sum <- rowSums(bt2_chi_py)
+
+bt2_chi_py[,1] <- bt2_chi_py[,1]/bt2_chi_py$sum
+bt2_chi_py[,2] <- bt2_chi_py[,2]/bt2_chi_py$sum
+bt2_chi_py[,3] <- bt2_chi_py[,3]/bt2_chi_py$sum
+
+btcp <- ggtern(bt2_chi_py, aes(Bowtie2, PymiRa, Chimira)) + geom_mask() + geom_point(color='black',size=1.5, shape=21) + stat_density_tern(geom='polygon', n=200, aes(fill=..level..)) + 
+  scale_fill_gradient(low='blue',high='red') +
+  labs(T='PymiRa', L='Bowtie2', R='Chimira',title='Bowtie2 vs Chimira vs PymiRa', fill='Level') + 
+  theme_rgbw() +
+  theme_nogrid_minor() + theme_custom(col.T='#E69F00', col.L="#56B4E9", col.R='darkgreen', tern.panel.background = 'white') + theme_showarrows()
+
+```
+
+
+#Figure 3
+#Top 600 simulated miRNA counts
+```{r}
+top_comb <- comb[comb$mirna %in% real[1:600,]$mirna,]
+top_comb[is.na(top_comb)] <- 0
+
+py_norm_top <- top_comb$PymiRa - top_comb$Real
+bt2_norm_top <- top_comb$Bowtie2 - top_comb$Real
+chi_norm_top <- top_comb$Chimira - top_comb$Real
+norm_data_top <- data.frame('mirna' = top_comb$mirna,
+                        'PymiRa'=py_norm_top,
+                        'Bowtie2'=bt2_norm_top,
+                        'Chimira'=chi_norm_top,
+                        'Real'=rep(0,nrow(top_comb)))
+
+top_norm_long <- gather(norm_data_top, key='Key', value='Value',-mirna)
+```
+
+```{r fig.height=6, fig.width=8}
+top_norm_long <- top_norm_long[top_norm_long$Key != 'Real',]
+top_norm_long$Key <- factor(top_norm_long$Key,levels = c('Bowtie2','Chimira', 'PymiRa'))
+
+highlight <- c(top_norm_long$mirna[grep('mir-548',top_norm_long$mirna)])
+top_norm_long <- top_norm_long %>% mutate(mirna = factor(mirna, levels = unique(mirna)))
+top_norm_long$Key <- factor(top_norm_long$Key, levels=c('Bowtie2', 'Chimira', 'PymiRa'))
+
+ggplot(top_norm_long, aes(x=mirna,y=Value, group=Key, color=Key)) + 
+  geom_rect(data=top_norm_long[top_norm_long$mirna %in% highlight,],
+            aes(xmin=as.numeric(mirna)-0.5,
+                xmax=as.numeric(mirna)+0.5,
+                ymin=-Inf, ymax=Inf, fill='miR-548 family miRNAs'),alpha=0.2,color=NA, inherit.aes = F) + scale_fill_manual(values=c('#f05d3e'), name=NULL) +
+  guides(color=guide_legend(order=1)) +
+  geom_line() + 
+  facet_wrap(~Key, ncol=1,nrow=4) + 
+  science_theme+theme(panel.grid.major =element_blank(), axis.ticks.x = element_blank(), axis.text.x=element_blank(), strip.text=element_text(size=12)) + labs(y='Normalised miRNA count', x='Individual counts for the top 600 miRNAs', color='Aligner') + scale_color_manual(values=c('#56B4E9', 'darkgreen','#E69F00')) + geom_abline(slope=0, col='red', linewidth=0.5) + scale_y_continuous(labels=scales::comma)
+```
+
+
+#Figure 4
+#Kim et al knockout counts
+```{r 960 - WT}
+bt2_60 <- read.csv('BT2_960_mature_counts_consolidated.txt', sep=',')
+bt2_names <- c('mirna', 'bt_count')
+names(bt2_60) <- bt2_names
+bt2_60 <- bt2_60[bt2_60$bt_count >0,]
+bt2_60 <- head(bt2_60, nrow(bt2_60)-1)
+
+
+py_60 <- read.csv('PY_960_counts.txt',sep='\t')
+py_names <- c('mirna', 'py_count')
+names(py_60) <- py_names
+py_60 <- head(py_60,nrow(py_60)-1)
+
+chi_60 <- read.csv('CHI_960_counts.txt',sep='\t')
+chi_names <- c('mirna', 'chi_count')
+names(chi_60) <- chi_names
+chi_60 <- head(chi_60,nrow(chi_60)-1)
+
+```
+
+```{r Merge counts}
+py_bt_60 <- merge(py_60,bt2_60, by='mirna', all=T)
+py_bt_chi_60 <- merge(py_bt_60, chi_60, by='mirna', all=T)
+py_bt_chi_60[is.na(py_bt_chi_60)] <- 0
+```
+
+```{r fig.width=8, fig.height=6}
+py_bt_chi_60$mirna <- NULL
+py_bt_chi_60$sum <- rowSums(py_bt_chi_60)
+
+py_bt_chi_60[,1] <- py_bt_chi_60[,1]/py_bt_chi_60$sum
+py_bt_chi_60[,2] <- py_bt_chi_60[,2]/py_bt_chi_60$sum
+py_bt_chi_60[,3] <- py_bt_chi_60[,3]/py_bt_chi_60$sum
+
+
+ggtern(py_bt_chi_60, aes(bt_count,py_count,chi_count)) + geom_mask() + geom_point(color='black',size=1.5, shape=21) + stat_density_tern(geom='polygon', n=100, aes(fill=..level..)) + 
+  scale_fill_gradient(low='blue',high='red') +
+  labs(T='PymiRa', L='Bowtie2', R='Chimira', title='Parental') + 
+  theme_rgbw() +
+  theme_nogrid_minor() + theme_custom(col.T='#E69F00', col.L="#56B4E9", col.R='darkgreen', tern.panel.background = 'white') + theme_showarrows()
+```
+
+```{r 962 - Drosha KO}
+bt2_names <- c('mirna', 'bt_count')
+bt2_62 <- read.csv('BT2_962_mature_counts_consolidated.txt')
+names(bt2_62) <- bt2_names
+bt2_62 <- bt2_62[bt2_62$bt_count >0,]
+bt2_62 <- head(bt2_62, nrow(bt2_62)-1)
+
+py_62 <- read.csv('PY_962_counts.txt',sep='\t')
+py_names <- c('mirna', 'py_count')
+names(py_62) <- py_names
+py_62 <- head(py_62,nrow(py_62)-1)
+
+chi_62 <- read.csv('CHI_962_counts.txt',sep='\t')
+chi_names <- c('mirna', 'chi_count')
+names(chi_62) <- chi_names
+chi_62 <- head(chi_62,nrow(chi_62)-1)
+
+```
+
+```{r Merge counts}
+py_bt_62 <- merge(py_62,bt2_62, by='mirna', all=T)
+py_bt_chi_62 <- merge(py_bt_62, chi_62, by='mirna', all=T)
+py_bt_chi_62[is.na(py_bt_chi_62)] <- 0
+```
+
+```{r fig.width=8, fig.height=5}
+py_bt_chi_62$mirna <- NULL
+py_bt_chi_62$sum <- rowSums(py_bt_chi_62)
+
+py_bt_chi_62[,1] <- py_bt_chi_62[,1]/py_bt_chi_62$sum
+py_bt_chi_62[,2] <- py_bt_chi_62[,2]/py_bt_chi_62$sum
+py_bt_chi_62[,3] <- py_bt_chi_62[,3]/py_bt_chi_62$sum
+
+ggtern(py_bt_chi_62, aes(bt_count,py_count,chi_count)) + geom_mask() + geom_point(color='black',size=1.5, shape=21) + stat_density_tern(geom='polygon', n=200, aes(fill=..level..)) + 
+  scale_fill_gradient(low='blue',high='red') +
+  labs(T='PymiRa', L='Bowtie2', R='Chimira', title='DROSHA', fill='Level') + 
+  theme_rgbw() +
+  theme_nogrid_minor() + theme_custom(col.T='#E69F00', col.L="#56B4E9", col.R='darkgreen', tern.panel.background = 'white') + theme_showarrows()
+
+```
+
+
+```{r 965 - XPO5 KO}
+bt2_names <- c('mirna', 'bt_count')
+bt2_65 <- read.csv('BT2_965_mature_counts_consolidated.txt')
+names(bt2_65) <- bt2_names
+bt2_65 <- bt2_65[bt2_65$bt_count >0,]
+bt2_65 <- head(bt2_65, nrow(bt2_65)-1)
+
+py_65 <- read.csv('PY_965_counts.txt',sep=',')
+py_names <- c('mirna', 'py_count')
+names(py_65) <- py_names
+py_65 <- head(py_65,nrow(py_65)-1)
+
+chi_65 <- read.csv('CHI_965_counts.txt',sep='\t')
+chi_names <- c('mirna', 'chi_count')
+names(chi_65) <- chi_names
+chi_65 <- head(chi_65,nrow(chi_65)-1)
+
+```
+
+```{r Merge counts}
+py_bt_65 <- merge(py_65,bt2_65, by='mirna', all=T)
+py_bt_chi_65 <- merge(py_bt_65, chi_65, by='mirna', all=T)
+py_bt_chi_65[is.na(py_bt_chi_65)] <- 0
+```
+
+```{r fig.width=8, fig.height=5}
+py_bt_chi_65$mirna <- NULL
+py_bt_chi_65$sum <- rowSums(py_bt_chi_65)
+
+py_bt_chi_65[,1] <- py_bt_chi_65[,1]/py_bt_chi_65$sum
+py_bt_chi_65[,2] <- py_bt_chi_65[,2]/py_bt_chi_65$sum
+py_bt_chi_65[,3] <- py_bt_chi_65[,3]/py_bt_chi_65$sum
+
+ggtern(py_bt_chi_65, aes(bt_count,py_count,chi_count)) + geom_mask() + geom_point(color='black',size=1.5, shape=21) + stat_density_tern(geom='polygon', n=200, aes(fill=..level..)) + 
+  scale_fill_gradient(low='blue',high='red') +
+  labs(T='PymiRa', L='Bowtie2', R='Chimira', title='XPO5', fill='Level') + 
+  theme_rgbw() +
+  theme_nogrid_minor() + theme_custom(col.T='#E69F00', col.L="#56B4E9", col.R='darkgreen', tern.panel.background = 'white') + theme_showarrows()
+```
+
+
+```{r 967 - DICER KO}
+bt2_names <- c('mirna', 'bt_count')
+bt2_67 <- read.csv('BT2_967_mature_counts_consolidated.txt')
+names(bt2_67) <- bt2_names
+bt2_67 <- bt2_67[bt2_67$bt_count >0,]
+bt2_67 <- head(bt2_67, nrow(bt2_67)-1)
+
+py_67 <- read.csv('PY_967_counts.txt',sep=',')
+py_names <- c('mirna', 'py_count')
+names(py_67) <- py_names
+py_67 <- head(py_67,nrow(py_67)-1)
+
+chi_67 <- read.csv('CHI_967_counts.txt',sep='\t')
+chi_names <- c('mirna', 'chi_count')
+names(chi_67) <- chi_names
+chi_67 <- head(chi_67,nrow(chi_67)-1)
+```
+
+
+```{r Merge counts}
+py_bt_67 <- merge(py_67,bt2_67, by='mirna', all=T)
+py_bt_chi_67 <- merge(py_bt_67, chi_67, by='mirna', all=T)
+py_bt_chi_67[is.na(py_bt_chi_67)] <- 0
+```
+
+```{r fig.width=8, fig.height=5}
+py_bt_chi_67$mirna <- NULL
+py_bt_chi_67$sum <- rowSums(py_bt_chi_67)
+
+py_bt_chi_67[,1] <- py_bt_chi_67[,1]/py_bt_chi_67$sum
+py_bt_chi_67[,2] <- py_bt_chi_67[,2]/py_bt_chi_67$sum
+py_bt_chi_67[,3] <- py_bt_chi_67[,3]/py_bt_chi_67$sum
+
+ggtern(py_bt_chi_67, aes(bt_count,py_count,chi_count)) + geom_mask() + geom_point(color='black',size=1.5, shape=21) + stat_density_tern(geom='polygon', n=200, aes(fill=..level..)) + 
+  scale_fill_gradient(low='blue',high='red') +
+  labs(T='PymiRa', L='Bowtie2', R='Chimira', title='DICER', fill='Level') + 
+  theme_rgbw() +
+  theme_nogrid_minor() + theme_custom(col.T='#E69F00', col.L="#56B4E9", col.R='darkgreen', tern.panel.background = 'white') + theme_showarrows()
+
+```
+
+
+
+
+# Figure 5 - Quantitative benchmarking A
+```{r Biological KIM data}
+library(tidyr)
+quant <- read.csv('Figure 5AB - quant_stats.csv')
+
+names(quant) <- c('aligner', 'Parental', 'Drosha_KO', 'XPO5_KO', 'Dicer_KO', 'Simulated_10mil')
+quant$aligner[1] <- 'PymiRa'
+x_axis_labels <- c('Parental','DROSHA', 'XPO5', 'DICER')
+quant_l <- gather(quant, key='Key', value='Value', -aligner)
+quant_l$Key <- factor(quant_l$Key, levels=c('Simulated_10mil','Parental', 'Drosha_KO', 'XPO5_KO', 'Dicer_KO'))
+quant_l$aligner <- factor(quant_l$aligner, levels=c('Bowtie2', 'PymiRa', 'Chimira'))
+
+aa <- ggplot(quant_l[quant_l$Key=='Simulated_10mil',], aes(x=Key, y=Value, color=aligner)) + geom_point(size=2.5) + scale_color_manual(values=c("#56B4E9",'#E69F00','darkgreen')) + science_theme + labs(color='Aligner', y= 'Time (s)', x='Simulated miRNA dataset') + guides(color='none') + scale_x_discrete(labels='10 million') + ylim(150,270)
+```
+
+#B
+```{r}
+quant_l_2 <- quant_l[quant_l$Key != 'Simulated_10mil',]
+quant_l_2$Key <- factor(quant_l_2$Key, levels=c('Parental', 'Drosha_KO', 'XPO5_KO', 'Dicer_KO'))
+quant_l_2$aligner <- factor(quant_l_2$aligner, levels=c('Bowtie2', 'Chimira', 'PymiRa'))
+bb <- ggplot(quant_l_2, aes(x=Key, y=Value, group=aligner, color=aligner)) + geom_point(size=2) + geom_line(linetype='dashed') + scale_color_manual(values=c("#56B4E9",'darkgreen','#E69F00')) + science_theme + labs(color='Aligner', y='Time (s)', x=c('Kim, et al., 2016 datasets'))+ ylim(0,250) + scale_x_discrete(labels=x_axis_labels) + guides(color='none')
+```
+
+#C
+```{r}
+aligned_time_data <- read.csv('Figure 5C - quantitative_benchmarking_simulated_dataset.csv')
+cc <- ggplot(aligned_time_data, aes(x=mirnas_aligned, y=time, colour=aligner)) + geom_point(size=4) + scale_colour_manual(values=c('#56B4E9','darkgreen','#E69F00')) + labs(y='Time (s)', x='Number of miRNAs aligned', color='Aligner') + scale_y_continuous(limits=c(150, 270)) + scale_x_continuous(limits=c(2300000, 3000000), labels=scales::comma) + science_theme
+```
+
+
+```{r}
+gg <- cowplot::plot_grid(aa,bb, ncol=2,nrow=1, labels='AUTO', align='h', rel_widths = c(2,3))
+gg
+```
+
+```{r}
+bottom <- cowplot::plot_grid(cc, labels=c('C'), rel_widths=c(5))
+bottom
+```
+
+
+
+##Supp FigureS1 - miR-548 counts
+
+```{r}
+top_comb <- comb[comb$mirna %in% real[1:600,]$mirna,]
+top_comb[is.na(top_comb)] <- 0
+
+mir_548 <- top_comb[grep('548',top_comb$mirna),]
+
+mir_548$mirna <- gsub('r','R',mir_548$mirna)
+mir_548_l <- gather(mir_548, key='Key', value='Value', -mirna)
+mir_548_l$Key <- factor(mir_548_l$Key, levels=c('Real', 'Bowtie2', 'Chimira', 'PymiRa'))
+ggplot(mir_548_l, aes(x=mirna, y=Value, group=Key, color=Key)) +geom_line() + labs(y='Raw miRNA count', x='Specific miRNA from the homo sapiens (hsa-) miR-548 family', colour='Key') + scale_color_manual(values=c('purple', '#56B4E9', 'darkgreen', '#E69F00')) +
+science_theme + theme(axis.text.x = element_text(angle=45, vjust=1.0,hjust=1), panel.grid.major.x = element_blank()) + scale_y_continuous(limits = c(0, NA),expand = c(0, 0), labels=scales::comma)
+```
+
+
+#Supp Figure S2A - proportion of miRNAs aligned by each aligner
+```{r}
+prop_data <- read.csv('Figure S2A - miRNA proportions.csv')
+prop_data$condition <- gsub('WT', 'Parental',prop_data$condition)
+prop_data$condition <- gsub('_KO','',prop_data$condition)
+prop_data$condition <- factor(prop_data$condition, levels=c('Parental', 'DROSHA', 'XPO5', 'DICER'))
+
+prop_data$aligner <- factor(prop_data$aligner, levels=c('Bowtie2','Chimira','PymiRa'))
+prop_data$type <- factor(prop_data$type, levels=c('Other', 'MiRNA'))
+b1 <- ggplot(prop_data, aes(x=aligner, y=Prop, fill=aligner)) + geom_bar(stat='identity',aes(alpha=ifelse(type=='Other', 0.0,1))) + facet_wrap(~condition, ncol=4, strip.position = 'bottom') + scale_fill_manual(values=c("#56B4E9",'darkgreen','#E69F00')) +  theme(axis.text.x = element_text(angle=45, vjust=0.5)) + scale_alpha_identity() + labs(fill='Aligner', y='Proportion of reads aligned as miRNAs (%)', x= 'Kim et al., 2016 datasets') + science_theme
+b1
+```
+
+#Supp Figure S2B - Fold changes from Kim et al 2016 and using PymiRa
+```{r}
+t <- data.frame('fc'=c(2.654,1.203,1.127,1.000,0.946,0.471), 'fc_py'=c(2.482,1.082,1.096,1.00,0.801,0.499))
+cor_graph <- cor(t$fc,t$fc_py)
+b2 <- ggplot(t, aes(x=fc, y=fc_py)) + geom_point() + geom_smooth(aes(x=fc, y=fc_py), method='lm',level=0.1) + labs(x='Kim et al., 2016 top miRNA fold changes', y='PymiRa top miRNA fold changes') + science_theme + annotate('text', x=0.5,y=2.6, label=paste('r =',round(cor_graph,4)))
+b2
+```
+
+
+
+
+
+
+
+
