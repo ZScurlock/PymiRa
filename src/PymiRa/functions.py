@@ -138,7 +138,7 @@ def generate_all(input_string, s_array=None, eos="$"):
 
     input_string = "".join([input_string, eos])
     if s_array is None:
-        s_array = np.argsort((input_string))
+        s_array = np.argsort(create_suffix_array(input_string))
     bwt = bwt_from_suffix(input_string, s_array)
     lf_map = lf_mapping(bwt)
 
