@@ -1,8 +1,16 @@
+### Temporary Notice
+This code is provided to journal reviewers and editors for the sole purpose of evaluating the associated manuscript. 
+All rights are reserved by the author(s). 
+No permission is granted to copy, distribute, modify, or otherwise use this code for any purpose beyond peer review.
+ An open-source license (MIT) will be applied upon formal publication of the manuscript, at which point broader use will be permitted.
+
+
 # PymiRa - A rapid and accurate classification tool for small non-coding RNAs (sncRNA), including microRNAs
 PymiRa utilises a Burrows-Wheeler transformation algorithm to rapidly identify short reads against a reference FASTA file, written in Python.
 
 This can be applied to identify different types of small non-coding RNAs by changing the reference FASTA file sequences are aligned to e.g. for microRNA identification (miRNAs), 
 the miRNA hairpin FASTA file derived from miRBase can be used.
+
 
 # Installation
 `pip install git+https://github.com/ZScurlock/PymiRa.git`
