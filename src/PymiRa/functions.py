@@ -407,8 +407,11 @@ def process_chunk(
     res_dict = {k: v for k, v in res_dict.items() if any(v)}
 
     # Locates the position of all spaces in the reference
-    space_pos = list(find_all(ref_seq, " "))
-    space_pos = list(map(lambda x: x + 1, space_pos))
+    arr = np.frombuffer(ref_seq.encode('ascii'), dtype=np.uint8)
+    space_pos = np.where(arr == ord(' '))[0]
+    space_pos +=1
+    #space_pos = list(find_all(ref_seq, " "))
+    #space_pos = list(map(lambda x: x + 1, space_pos))
 
     # Refers the hit back to the reference sample
     for key in res_dict.copy():
@@ -423,7 +426,8 @@ def process_chunk(
             continue
 
         # Mismatch filter is 0 as mismatch and 1 as no mismatch
-        main_pos, pos_3p, mm = res
+        main_pos = np.array(res[0])
+        pos_3p, mm = res[1:]
 
         # True if there was a mismatch and there is a match in the 3`.
         if bool(pos_3p):
@@ -453,14 +457,18 @@ def process_chunk(
                 else:
                     continue
 
-            main_pos = main_pos_2
+            main_pos = np.array(main_pos_2)
             if len(main_pos) < 1:
                 res_dict.pop(key)
                 continue
 
         # Multi-mapping reads - will be equally split over number of sites
         if len(main_pos) > 1:
-            read_ind = [bisect_left(space_pos, main_reads) for main_reads in main_pos]
+            mask=np.isin(main_pos,space_pos)
+            main_pos[mask] +=1
+            
+            read_ind = np.searchsorted(space_pos,main_pos,side='left')
+
             actual_ind_list = []
             # Result changes whether the read aligns exactly to the start of the sequence or elsewhere
             for x in read_ind:
