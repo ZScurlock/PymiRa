@@ -410,8 +410,6 @@ def process_chunk(
     arr = np.frombuffer(ref_seq.encode('ascii'), dtype=np.uint8)
     space_pos = np.where(arr == ord(' '))[0]
     space_pos +=1
-    #space_pos = list(find_all(ref_seq, " "))
-    #space_pos = list(map(lambda x: x + 1, space_pos))
 
     # Refers the hit back to the reference sample
     for key in res_dict.copy():
@@ -541,11 +539,49 @@ def process_chunk(
                 except:
                     res_dict.pop(key)
                     continue
+                #NEW
+                if main_pos[0] + 9 < space_pos[actual_ind] + (len(subject_seq) / 2):
+                    orient = "-5p"
+                else:
+                    orient = "-3p"
+                    
                 names = ids_ref[actual_ind + 1].split(" MI")[0] + orient
                 res_dict[key] = names
+                
+                try:
+                    test_dict.update([res_dict[key]])
+                except NameError:
+                    test_dict = DecimalCounter()
+                    test_dict.update(res_dict[key])
+                ###
         else:
             try:
                 space_pos_ind = bisect_left(space_pos, main_pos[0])
+                
+                if space_pos_ind == len(space_pos):
+                    actual_ind=-1
+                    
+                    subject_seq = ref_seq[
+                    space_pos[actual_ind]:
+                    ]
+                        
+                    if main_pos[0] + 9 < space_pos[actual_ind] + (len(subject_seq) / 2):
+                        orient = "-5p"
+                    else:
+                        orient = "-3p"
+                        
+                    names = ids_ref[actual_ind].split(" MI")[0] + orient
+                    res_dict[key] = names
+                    #print(names)
+                    try:
+                        test_dict.update([res_dict[key]])
+                        continue
+                    except NameError:
+                        test_dict = DecimalCounter()
+                        test_dict.update([res_dict[key]])
+                        continue
+                    
+                
                 if space_pos[space_pos_ind] not in main_pos:
                     actual_ind = space_pos_ind - 1
                 else:

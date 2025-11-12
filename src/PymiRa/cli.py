@@ -79,7 +79,7 @@ def main():
         ids_ref=ref_ids,
         bwt_data=required,
         mismatches_5p=args.mismatches_5p,
-        mismatches_3p=args.mismatches_3p,
+        mismatches_3p=args.mismatches_3p
     )
     with multiprocessing.Pool(processes=args.num_proc) as pool:
         res_res = pool.map(process_chunk2, container)
@@ -89,31 +89,33 @@ def main():
     for x in range(len(res_res)):
         if len(res_res[x][0]) > 0:
             emp.append(res_res[x][0])
+    try:
+        final = emp[0]
+        for merge in range(1, len(emp)):
+            final.update(emp[merge])
+    
+        log = {}
+        for up in range(len(res_res)):
+            log.update(res_res[up][1])
+    
+        # Creating read-alignment log file
+        with open(str(args.out_path) + "_FIX_pymira_log.json", "w") as fh:
+            json.dump(log, fh, indent=2)
+    
+        # Creating and formatting counts table
+        results = pd.DataFrame.from_dict(final, orient="index")
+        results.rename(columns={0: "Count"}, inplace=True)
+        results = results.sort_values(by=["Count"], ascending=False)
+        results.Count = results.Count.astype(int)
+        results = results[results.Count > 0]
+        total = results.Count.sum()
+        final_row = pd.DataFrame({"Count": total}, index=["TotalCount"])
+        results = pd.concat([results, final_row])
+        results.index.name = args.input_fasta.split("/")[-1]
+        results.to_csv(str(args.out_path + "_FIX_pymira_counts.txt"))
 
-    final = emp[0]
-    for merge in range(1, len(emp)):
-        final.update(emp[merge])
-
-    log = {}
-    for up in range(len(res_res)):
-        log.update(res_res[up][1])
-
-    # Creating read-alignment log file
-    with open(str(args.out_path) + "_pymira_log.json", "w") as fh:
-        json.dump(log, fh, indent=2)
-
-    # Creating and formatting counts table
-    results = pd.DataFrame.from_dict(final, orient="index")
-    results.rename(columns={0: "Count"}, inplace=True)
-    results = results.sort_values(by=["Count"], ascending=False)
-    results.Count = results.Count.astype(int)
-    results = results[results.Count > 0]
-    total = results.Count.sum()
-    final_row = pd.DataFrame({"Count": total}, index=["TotalCount"])
-    results = pd.concat([results, final_row])
-    results.index.name = args.input_fasta.split("/")[-1]
-    results.to_csv(str(args.out_path + "_pymira_counts.txt"))
-
-
+    except IndexError:
+        print('No miRNAs were found in your <input_fasta> file so there are no results.')
+        
 if __name__ == "__main__":
     main()

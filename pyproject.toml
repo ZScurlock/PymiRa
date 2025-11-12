@@ -12,7 +12,7 @@ authors = [
     {name = "Zachary Scurlock", email = "zs395@cam.ac.uk"}
 ]
 dependencies = [
-    "numpy >=1.23.5", "pandas >= 1.5.2","partial>=1.0"  # example dependency
+    "numpy >=1.23.5", "pandas >= 1.5.2","partial>=1.0"
 ]
 
 [project.scripts]
