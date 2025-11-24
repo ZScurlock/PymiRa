@@ -6,6 +6,7 @@ from functools import partial
 import multiprocessing
 import pandas as pd
 import json
+from collections import defaultdict
 
 
 def main():
@@ -57,8 +58,14 @@ def main():
     args = parser.parse_args()
 
     # Import and format the FASTA
-    input_file_dict, input_file_ids = pym.parse_fasta(args.input_fasta)
-    container = pym.split_fasta_dict(input_file_dict, int(args.num_proc))
+    input_file_dict, input_file_ids = pym.upload_file(args.input_fasta)
+    seq_dict = defaultdict(list)
+    for name,seq in input_file_dict.items():
+        seq_dict[seq].append(name)
+    
+    int_dict = {k:len(v) for k,v in seq_dict.items()}
+    
+    container = pym.split_fasta_dict(int_dict, int(args.num_proc))
 
     # Import and format the reference sequence (miRBase)
     ref_dict, ref_ids = pym.parse_fasta(args.ref_fasta)
@@ -75,9 +82,10 @@ def main():
     # Alignment
     process_chunk2 = partial(
         pym.process_chunk,
-        ref_seq=clean_ref,
-        ids_ref=ref_ids,
-        bwt_data=required,
+        ref_seq = clean_ref,
+        ids_ref = ref_ids,
+        bwt_data = required,
+        integer_dict = int_dict,
         mismatches_5p=args.mismatches_5p,
         mismatches_3p=args.mismatches_3p
     )
@@ -98,9 +106,14 @@ def main():
         for up in range(len(res_res)):
             log.update(res_res[up][1])
     
+        new_log = {}
+        for k,v in log.items():
+            all_read = seq_dict[k]
+            for read in all_read:
+                new_log[read] = v
         # Creating read-alignment log file
-        with open(str(args.out_path) + "_FIX_pymira_log.json", "w") as fh:
-            json.dump(log, fh, indent=2)
+        with open(str(args.out_path) + "_pymira_log.json", "w") as fh:
+            json.dump(new_log, fh, indent=2)
     
         # Creating and formatting counts table
         results = pd.DataFrame.from_dict(final, orient="index")
@@ -112,10 +125,10 @@ def main():
         final_row = pd.DataFrame({"Count": total}, index=["TotalCount"])
         results = pd.concat([results, final_row])
         results.index.name = args.input_fasta.split("/")[-1]
-        results.to_csv(str(args.out_path + "_FIX_pymira_counts.txt"))
+        results.to_csv(str(args.out_path + "_pymira_counts.txt"))
 
     except IndexError:
-        print('No miRNAs were found in your <input_fasta> file so there are no results.')
+        print('No read sequences were aligned in your <input_fasta> file so there are no results.')
         
 if __name__ == "__main__":
     main()

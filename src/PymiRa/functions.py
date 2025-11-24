@@ -10,17 +10,27 @@ from collections import Counter
 import numpy as np
 from itertools import zip_longest, islice
 from bisect import bisect_left, bisect_right
+import gzip
 
+def multi_open(file_path):
+    return gzip.open(file_path, 'rt') if file_path.endswith('.gz') else open(file_path, 'r')
 
+def upload_file(file_path):
+    split_name = file_path.lower().split('.')
+    if ('fasta' in split_name) or ('fa' in split_name):
+        return parse_fasta(file_path)
+    elif ('fastq' in split_name):
+        return parse_fastq(file_path)
+        
 def parse_fasta(file_path):
     """
-    Imports a FASTA file and substitutes U bases for T bases.
+    Imports a FASTA / FASTA.gz file and substitutes U bases for T bases.
     """
     fasta_dict = {}
     sequence_lines = []
     read_name = None
     print(f"Importing Fasta file {file_path}")
-    with open(file_path, "r") as file:
+    with multi_open(file_path) as file:
         for line in file:
             line = line.strip()
             if not line or line.startswith("#"):
@@ -37,6 +47,25 @@ def parse_fasta(file_path):
             fasta_dict[read_name] = "".join(sequence_lines)
 
     return fasta_dict, list(fasta_dict.keys())
+
+
+
+def parse_fastq(file_path):
+    """
+    Imports a FASTQ / FASTQ.gz file and substitutes U bases for T bases.
+    """
+    fastq_dict={}
+    with multi_open(file_path) as file:
+        while True:
+            name = file.readline().rstrip()
+            if not name:
+                break
+            seq = file.readline().rstrip().replace("U", "T")
+            file.readline()
+            file.readline()
+            
+            fastq_dict[name[1:]] = seq
+    return fastq_dict, list(fastq_dict.keys())
 
 
 def split_fasta_dict(fasta_dict, X):
@@ -191,7 +220,6 @@ def bwt_align(
     # inverted
     mismatch_flag = 1
     if len(search_string) == 0:
-        # return("Empty Query String")
         return []
     if bwt_data is None:
         bwt_data = generate_all(input_string, s_array=s_array)
@@ -356,14 +384,14 @@ class DecimalCounter(Counter):
     1/N reads.
     """
 
-    def update_division(self, iterable):
-        increment = 1 / len(iterable)
+    def update_division(self, iterable,num=1):
+        increment = num / len(iterable)
         for elem in iterable:
             self[elem] += increment
 
 
 def process_chunk(
-    input_dict, ref_seq, ids_ref, bwt_data, mismatches_5p=0, mismatches_3p=2
+    input_dict, ref_seq, ids_ref, bwt_data,integer_dict, mismatches_5p=0, mismatches_3p=2
 ):
     """
     Parameters
@@ -385,21 +413,21 @@ def process_chunk(
 
     res_dict = {x: [] for x in input_dict}
 
-    read_counter = 0
+    #read_counter = 0
     print("Starting alignment..")
-    test_dict = DecimalCounter()
+    #test_dict = DecimalCounter()
     for i in input_dict:
-        read_counter += 1
+        #read_counter += 1
         res_dict[i] = bwt_align(
-            input_dict[i],
+            i,
             ref_seq,
             mismatches_5p=mismatches_5p,
             mismatches_3p=mismatches_3p,
             bwt_data=bwt_data,
         )
-        factor = 250000
-        if read_counter % factor == 0:
-            print(f"Aligned {read_counter} sequences...")
+       # factor = 250000
+       # if read_counter % factor == 0:
+       #     print(f"Aligned {read_counter} sequences...")
 
     print("Processing alignment..")
 
@@ -519,10 +547,10 @@ def process_chunk(
                 res_dict[key] = names
 
                 try:
-                    test_dict.update_division(res_dict[key])
+                    test_dict.update_division(res_dict[key],integer_dict[key])
                 except NameError:
                     test_dict = DecimalCounter()
-                    test_dict.update_division(res_dict[key])
+                    test_dict.update_division(res_dict[key],integer_dict[key])
                 continue
             else:
                 names = []
@@ -549,10 +577,10 @@ def process_chunk(
                 res_dict[key] = names
                 
                 try:
-                    test_dict.update([res_dict[key]])
+                    test_dict.update([res_dict[key]]*integer_dict[key])
                 except NameError:
                     test_dict = DecimalCounter()
-                    test_dict.update(res_dict[key])
+                    test_dict.update([res_dict[key]]*integer_dict[key])
                 ###
         else:
             try:
@@ -574,11 +602,11 @@ def process_chunk(
                     res_dict[key] = names
                     #print(names)
                     try:
-                        test_dict.update([res_dict[key]])
+                        test_dict.update([res_dict[key]]*integer_dict[key])
                         continue
                     except NameError:
                         test_dict = DecimalCounter()
-                        test_dict.update([res_dict[key]])
+                        test_dict.update([res_dict[key]]*integer_dict[key])
                         continue
                     
                 
@@ -604,10 +632,10 @@ def process_chunk(
             res_dict[key] = names
 
             try:
-                test_dict.update([res_dict[key]])
+                test_dict.update([res_dict[key]]*integer_dict[key])
 
             except NameError:
                 test_dict = DecimalCounter()
-                test_dict.update([res_dict[key]])
+                test_dict.update([res_dict[key]]*integer_dict[key])
 
     return test_dict, res_dict
