@@ -29,7 +29,6 @@ def parse_fasta(file_path):
     fasta_dict = {}
     sequence_lines = []
     read_name = None
-    print(f"Importing Fasta file {file_path}")
     with multi_open(file_path) as file:
         for line in file:
             line = line.strip()
@@ -391,33 +390,42 @@ class DecimalCounter(Counter):
 
 
 def process_chunk(
-    input_dict, ref_seq, ids_ref, bwt_data,integer_dict, mismatches_5p=0, mismatches_3p=2
+    input_dict, ref_seq, ids_ref, bwt_data, integer_dict, mirna_flag=False, mismatches_5p=0, mismatches_3p=2, 
 ):
     """
+
     Parameters
     ----------
     input_dict : dict
-        Dictionary of FASTA.
+        Dictionary of input_files, keys as read names and values as sequences
     ref_seq : str
-        Reference sequence to align against.
+        Reference sequence to align against
     ids_ref : list
-        Reference sequence IDs.
+        Reference sequence IDs
     bwt_data : list
-        BWT created data.
+        BWT created data
+    integer_dict : dict
+        Dictionary with sequences as keys and integers as values (number of times the sequence is found in the file)
+    mirna_flag : bool
+        Flag for to restrict miRNA alignments to either end of the hairpin sequence, adding either -5p / -3p notation. 
+        The default is False.
+    mismatches_5p : TYPE, optional
+        DESCRIPTION. The default is 0.
+    mismatches_3p : TYPE, optional
+        DESCRIPTION. The default is 2.
 
     Returns
     -------
-    None.
+    test_dict : TYPE
+        DESCRIPTION.
+    res_dict : TYPE
+        DESCRIPTION.
 
     """
 
     res_dict = {x: [] for x in input_dict}
 
-    #read_counter = 0
-    print("Starting alignment..")
-    #test_dict = DecimalCounter()
     for i in input_dict:
-        #read_counter += 1
         res_dict[i] = bwt_align(
             i,
             ref_seq,
@@ -425,11 +433,7 @@ def process_chunk(
             mismatches_3p=mismatches_3p,
             bwt_data=bwt_data,
         )
-       # factor = 250000
-       # if read_counter % factor == 0:
-       #     print(f"Aligned {read_counter} sequences...")
 
-    print("Processing alignment..")
 
     # Removes reads with no hits
     res_dict = {k: v for k, v in res_dict.items() if any(v)}
@@ -438,17 +442,22 @@ def process_chunk(
     arr = np.frombuffer(ref_seq.encode('ascii'), dtype=np.uint8)
     space_pos = np.where(arr == ord(' '))[0]
     space_pos +=1
-
+    
+    no_reads=False
+    
+    test_dict = DecimalCounter()
     # Refers the hit back to the reference sample
     for key in res_dict.copy():
         res = res_dict[key]
         if (len(res) > 0) & (len(res[0]) != 0):
             # Removes reads with 3 mismatches in main part of read.
             if (res[2] == 0) & (len(res[0]) >= 1) & (not bool(res[1])):
+                #Unsuccess_dict.append(key) - Reason - too many mismatches in 5' end of read.
                 res_dict.pop(key)
                 continue
         else:
             res_dict.pop(key)
+            #Unsuccess_dict.append(key) - Reason - should not be here
             continue
 
         # Mismatch filter is 0 as mismatch and 1 as no mismatch
@@ -464,6 +473,7 @@ def process_chunk(
             np_pos_3p = np_pos_3p[np_pos_3p >= np_main_pos.min()]
             if len(np_pos_3p) == 0:
                 res_dict.pop(key)
+                #Unsuccess_dict.append(key) - Reason - no valid 3p end alignment
                 continue
 
             # Finds the value immediately greater than each main_pos value
@@ -487,155 +497,70 @@ def process_chunk(
             if len(main_pos) < 1:
                 res_dict.pop(key)
                 continue
-
-        # Multi-mapping reads - will be equally split over number of sites
-        if len(main_pos) > 1:
-            mask=np.isin(main_pos,space_pos)
-            main_pos[mask] +=1
+        
+        # 
+        mask=np.isin(main_pos,space_pos)
+        main_pos[mask] +=1
+        
+        read_ind = np.unique(np.searchsorted(space_pos,main_pos,side='left'))
+        ids_ind = read_ind-1
+        
+        ids = [ids_ref[x] for x in ids_ind]
+        subject_seq=[]
+        
+        for actual ,num in enumerate(read_ind):
+            subject_seq.append(ref_seq[space_pos[num - 1] : space_pos[num] - 1])
+            #if ref_seq[space_pos[num - 1] : space_pos[num] - 1] != ref_dict[ids[actual]]:
+            #    print('NOT MATCHING', key, ref_ids[actual])
+                
+        
+        #names = []
+        int_name = [x for x in ids]
+        if mirna_flag:
+            orient=[]
+            newlist=[]
+            for i in range(len(ids)):
             
-            read_ind = np.searchsorted(space_pos,main_pos,side='left')
-
-            actual_ind_list = []
-            # Result changes whether the read aligns exactly to the start of the sequence or elsewhere
-            for x in read_ind:
-                if x == len(space_pos):
-                    actual_ind = len(space_pos) - 1
-                    actual_ind_list.append(actual_ind)
+                #id_counter+=1
+            #Remove matches in middle of miRNA hairpins
+                min_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) - 5
+                max_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) + 5
+                if not (main_pos[i] > min_bound) or not (main_pos[i] < max_bound):
+                    newlist.append(ids[i])
+                    #newlist_add_counter +=1
+                
+                if len(newlist) == 0:
+                    no_reads=True                 
                     continue
-                if space_pos[x] not in main_pos:
-                    actual_ind = x - 1
-                else:
-                    actual_ind = x
-                actual_ind_list.append(actual_ind)
-
-            # Elucidate 5p/3p aligning
-            if len(set(actual_ind_list)) != 1:
-                ids = [ids_ref[x] for x in read_ind]
-                ids = list(set(ids))
-                try:
-                    subject_seq = [
-                        ref_seq[space_pos[actual] : space_pos[actual + 1] - 1]
-                        for actual in actual_ind_list
-                    ]
-
-                except IndexError:
-                    actual_ind_list_new = [
-                        x for x in actual_ind_list if x < max(actual_ind_list)
-                    ]
-                    subject_seq_int = [
-                        ref_seq[space_pos[actual] : space_pos[actual + 1] - 1]
-                        for actual in actual_ind_list_new
-                    ]
-                    subject_seq_end = [
-                        ref_seq[space_pos[actual_ind_list[actual]] :]
-                        for actual in range(
-                            len(actual_ind_list) - len(actual_ind_list_new)
-                        )
-                    ]
-                    subject_seq_int.extend(subject_seq_end)
-                    subject_seq = subject_seq_int
-                names = []
-                for i in range(len(ids)):
-                    if main_pos[i] + 9 < space_pos[actual_ind_list[i]] + (
+                #Add orientations
+                if no_reads == True:
+                    print('Skipping due to alignments in middle')
+                    #Unsuccess_dict.append(key) - Reason - alignments in the middle of hairpin.
+                    continue
+                for i in range(len(newlist)):
+                    if main_pos[i] + 9 < space_pos[read_ind[i]-1] + (
                         len(subject_seq[i]) / 2
                     ):
-                        orient = "-5p"
+                        orient.append("-5p")
                     else:
-                        orient = "-3p"
-                    int_name = ids[i].split(" MI")[0] + orient
-                    names.append(int_name)
-                res_dict[key] = names
-
-                try:
-                    test_dict.update_division(res_dict[key],integer_dict[key])
-                except NameError:
-                    test_dict = DecimalCounter()
-                    test_dict.update_division(res_dict[key],integer_dict[key])
-                continue
-            else:
-                names = []
-                try:
-                    space_pos_ind = bisect_left(space_pos, main_pos[0])
-                    if space_pos[space_pos_ind] not in main_pos:
-                        actual_ind = space_pos_ind - 1
-                    else:
-                        actual_ind = space_pos_ind
-
-                    subject_seq = ref_seq[
-                        space_pos[actual_ind] : space_pos[actual_ind + 1] - 1
-                    ]
-                except:
-                    res_dict.pop(key)
-                    continue
-                #NEW
-                if main_pos[0] + 9 < space_pos[actual_ind] + (len(subject_seq) / 2):
-                    orient = "-5p"
-                else:
-                    orient = "-3p"
-                    
-                names = ids_ref[actual_ind + 1].split(" MI")[0] + orient
-                res_dict[key] = names
-                
-                try:
-                    test_dict.update([res_dict[key]]*integer_dict[key])
-                except NameError:
-                    test_dict = DecimalCounter()
-                    test_dict.update([res_dict[key]]*integer_dict[key])
-                ###
-        else:
-            try:
-                space_pos_ind = bisect_left(space_pos, main_pos[0])
-                
-                if space_pos_ind == len(space_pos):
-                    actual_ind=-1
-                    
-                    subject_seq = ref_seq[
-                    space_pos[actual_ind]:
-                    ]
-                        
-                    if main_pos[0] + 9 < space_pos[actual_ind] + (len(subject_seq) / 2):
-                        orient = "-5p"
-                    else:
-                        orient = "-3p"
-                        
-                    names = ids_ref[actual_ind].split(" MI")[0] + orient
-                    res_dict[key] = names
-                    #print(names)
-                    try:
-                        test_dict.update([res_dict[key]]*integer_dict[key])
-                        continue
-                    except NameError:
-                        test_dict = DecimalCounter()
-                        test_dict.update([res_dict[key]]*integer_dict[key])
-                        continue
-                    
-                
-                if space_pos[space_pos_ind] not in main_pos:
-                    actual_ind = space_pos_ind - 1
-                else:
-                    actual_ind = space_pos_ind
-
-                subject_seq = ref_seq[
-                    space_pos[actual_ind] : space_pos[actual_ind + 1] - 1
-                ]
-
-                if main_pos[0] + 9 < space_pos[actual_ind] + (len(subject_seq) / 2):
-                    orient = "-5p"
-                else:
-                    orient = "-3p"
-            except:
+                        orient.append("-3p")
+                    #orient_add_counter+=1
+                    #align_pos.append(main_pos[i] - space_pos[read_ind[i]-1])
+            
+            if no_reads == True:
+                print(f'Ignoring this read {ids}')
+                #Unsuccess_dict.append(key) - Reason: Aligns to middle of hairpin
                 res_dict.pop(key)
+                no_reads=False
                 continue
-
-            # Plus one here because there is no space before the first reference sequence
-            names = ids_ref[actual_ind + 1].split(" MI")[0] + orient
-            res_dict[key] = names
-
-            try:
-                test_dict.update([res_dict[key]]*integer_dict[key])
-
-            except NameError:
-                test_dict = DecimalCounter()
-                test_dict.update([res_dict[key]]*integer_dict[key])
-
-    return test_dict, res_dict
+            
+            int_name = [ids[n].split(" MI")[0] + orient[n] for n in range(len(ids))]
+        
+        res_dict[key] = int_name
+        #res_dict_counter+=1
+        if len(int_name) > 1:
+            test_dict.update_division(res_dict[key],integer_dict[key])
+        else:
+            test_dict.update(res_dict[key]*integer_dict[key])
+        continue
+    return test_dict,res_dict

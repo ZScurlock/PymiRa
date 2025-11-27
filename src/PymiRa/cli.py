@@ -11,19 +11,19 @@ from collections import defaultdict
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Align an <input_fasta> against a <reference_fasta> file, to obtain a counts and log file."
+        description="Align an <input_file> against a <reference_fasta> file, to obtain sequence counts and log file."
     )
     parser.add_argument(
-        "--input_fasta",
+        "--input_file",
         type=str,
         required=True,
-        help="An input FASTA file to identify small RNAs from.",
+        help="Input sequence file (FASTA / FASTQ, optionally gzipped) to identify small RNAs from.",
     )
     parser.add_argument(
-        "--ref_fasta",
+        "--ref_file",
         type=str,
         required=True,
-        help="A reference FASTA file used to align the <input_fasta> against e.g. miRBase hairpin file for microRNA identification",
+        help="Reference sequence file (FASTA / FASTQ, optionally gzipped) used to align the <input_file> against e.g. miRBase hairpin file for microRNA identification",
     )
     parser.add_argument(
         "--out_path",
@@ -37,7 +37,15 @@ def main():
         default=4,
         help="Number of processors to be used. Default is 4.",
     )
-
+    
+    parser.add_argument(
+        '--mirna',
+        action='store_true',
+        default=False,
+        help="""For use with mature miRNA sequences.\n Restricts alignments to the ends of a precursor (preventing alignment of isomiR / degradation products).
+        Adds '-5p' / '-3p' notation to miRNA alignments.Default is off.
+        """
+        )
     parser.add_argument(
         "--mismatches_5p",
         type=int,
@@ -58,7 +66,9 @@ def main():
     args = parser.parse_args()
 
     # Import and format the FASTA
-    input_file_dict, input_file_ids = pym.upload_file(args.input_fasta)
+    print(f"Importing input_file: {args.input_file}")
+    input_file_dict, input_file_ids = pym.upload_file(args.input_file)
+    
     seq_dict = defaultdict(list)
     for name,seq in input_file_dict.items():
         seq_dict[seq].append(name)
@@ -68,26 +78,31 @@ def main():
     container = pym.split_fasta_dict(int_dict, int(args.num_proc))
 
     # Import and format the reference sequence (miRBase)
-    ref_dict, ref_ids = pym.parse_fasta(args.ref_fasta)
+    print(f"Importing reference file: {args.ref_file}")
+    ref_dict, ref_ids = pym.upload_file(args.ref_file)
 
     print("Generating reference..")
     ref = [" ".join(list(ref_dict.values()))]
-    del ref_dict
+#    del ref_dict
     clean_ref = re.sub(r"[^a-zA-Z\s]", "", str(ref))
-
+    clean_ref += ' '
+    clean_ref = ' ' + clean_ref
+    
     # BWT creation
     letters, bwt, lf_map, count, s_array = pym.generate_all(clean_ref)
     required = [letters, bwt, lf_map, count, s_array]
 
     # Alignment
+    print("Running alignment..")
     process_chunk2 = partial(
         pym.process_chunk,
         ref_seq = clean_ref,
         ids_ref = ref_ids,
         bwt_data = required,
         integer_dict = int_dict,
-        mismatches_5p=args.mismatches_5p,
-        mismatches_3p=args.mismatches_3p
+        mismatches_5p = args.mismatches_5p,
+        mismatches_3p = args.mismatches_3p,
+        mirna_flag = args.mirna
     )
     with multiprocessing.Pool(processes=args.num_proc) as pool:
         res_res = pool.map(process_chunk2, container)
@@ -124,11 +139,13 @@ def main():
         total = results.Count.sum()
         final_row = pd.DataFrame({"Count": total}, index=["TotalCount"])
         results = pd.concat([results, final_row])
-        results.index.name = args.input_fasta.split("/")[-1]
+        results.index.name = args.input_file.split("/")[-1]
         results.to_csv(str(args.out_path + "_pymira_counts.txt"))
-
+        
+        print(f"Counts and log files written to {args.out_path}" + "_pymira_counts.txt")
+        print(f"Counts and log files written to {args.out_path}" + "_pymira_log.json")
     except IndexError:
-        print('No read sequences were aligned in your <input_fasta> file so there are no results.')
+        print('No read sequences were aligned in <input_file> file so there are no results.')
         
 if __name__ == "__main__":
     main()
