@@ -104,40 +104,10 @@ def int_keys_best(l):
     index = {v: i for i, v in enumerate(seen)}
     return [index[v] for v in l]
 
-
-def create_suffix_array(s):
-    n = len(s)
-    k = 1
-    line = np.array(int_keys_best(s), dtype="int64")
-    while line.max() < n - 1:
-        line = np.array(
-            int_keys_best(
-                [
-                    a * (n + 1) + b + 1
-                    for (a, b) in zip_longest(line, islice(line, k, None), fillvalue=-1)
-                ]
-            )
-        )
-        k <<= 1
-    return line
-
-
 def bwt_from_suffix(string, s_array=None):
     if s_array is None:
-        s_array = create_suffix_array(string)
+        s_array = suffix_array2(string)
     return "".join(string[idx - 1] for idx in s_array)
-
-
-def lf_mapping(bwt, letters=None):
-    if letters is None:
-        letters = set(bwt)
-
-    result = {letter: [0] for letter in letters}
-    result[bwt[0]] = [1]
-    for letter in bwt[1:]:
-        for i, j in result.items():
-            j.append(j[-1] + (i == letter))
-    return result
 
 
 def count_occurences(string, letters=None):
@@ -159,19 +129,49 @@ def update(begin, end, letter, lf_map, counts, string_length):
     ending = counts[letter] + lf_map[letter][end]
     return (beginning, ending)
 
+def suffix_array2(s):
+    n = len(s)
+    k = 1
+    line = np.array(int_keys_best(s), dtype='int64')    
+    prev = np.zeros(n, dtype='int64')
+    while line.max() < n - 1:
+        prev[-k::] = -1
+        prev[0:-k] = line[k::] + 1
+        line = (n + 1) * line + prev
+        k <<= 1
+        _, line = np.unique(line, return_inverse=True)
+    return line
+
+def lf_mapping_2(bwt,letters=None):
+    if letters is None:
+        letters=set(bwt)
+        
+    n = len(bwt)
+    results_array = np.zeros((n+2,len(letters)),dtype='int64')
+    results_array_idx = {letter:i for i, letter in enumerate(letters)}
+    
+    counts_array=np.zeros(len(letters),dtype='int64')
+    
+    for idx,letter in enumerate(bwt):
+        counts_array[results_array_idx[letter]] += 1
+        results_array[idx] = counts_array
+        
+    results_array=results_array.T
+    results = {letter:results_array[i] for i, letter in enumerate(letters)}
+    
+    return(results)
 
 def generate_all(input_string, s_array=None, eos="$"):
     letters = set(input_string)
-    counts = count_occurences(input_string)
+    counts = count_occurences(input_string, letters)
 
-    input_string = "".join([input_string, eos])
+    input_string += eos
+    
     if s_array is None:
-        s_array = np.argsort(create_suffix_array(input_string))
+        s_array = np.argsort(suffix_array2(input_string))
     bwt = bwt_from_suffix(input_string, s_array)
-    lf_map = lf_mapping(bwt)
+    lf_map = lf_mapping_2(bwt)
 
-    for i, j in lf_map.items():
-        j.extend([j[-1], 0])
     return letters, bwt, lf_map, counts, s_array
 
 
@@ -443,7 +443,6 @@ def process_chunk(
     space_pos = np.where(arr == ord(' '))[0]
     space_pos +=1
     
-    no_reads=False
     
     test_dict = DecimalCounter()
     # Refers the hit back to the reference sample
@@ -523,38 +522,24 @@ def process_chunk(
             
                 #id_counter+=1
             #Remove matches in middle of miRNA hairpins
-                min_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) - 5
-                max_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) + 5
+                min_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) - 4.5
+                max_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) + 4.5
                 if not (main_pos[i] > min_bound) or not (main_pos[i] < max_bound):
                     newlist.append(ids[i])
-                    #newlist_add_counter +=1
-                
-                if len(newlist) == 0:
-                    no_reads=True                 
-                    continue
-                #Add orientations
-                if no_reads == True:
-                    print('Skipping due to alignments in middle')
-                    #Unsuccess_dict.append(key) - Reason - alignments in the middle of hairpin.
-                    continue
-                for i in range(len(newlist)):
+                    
+                    #Add orientations
                     if main_pos[i] + 9 < space_pos[read_ind[i]-1] + (
                         len(subject_seq[i]) / 2
                     ):
                         orient.append("-5p")
                     else:
                         orient.append("-3p")
-                    #orient_add_counter+=1
-                    #align_pos.append(main_pos[i] - space_pos[read_ind[i]-1])
-            
-            if no_reads == True:
-                print(f'Ignoring this read {ids}')
-                #Unsuccess_dict.append(key) - Reason: Aligns to middle of hairpin
+                        
+            if len(newlist) == 0:
                 res_dict.pop(key)
-                no_reads=False
                 continue
             
-            int_name = [ids[n].split(" MI")[0] + orient[n] for n in range(len(ids))]
+            int_name = [ids[n].split(" MI")[0] + orient[n] for n in range(len(newlist))]
         
         res_dict[key] = int_name
         #res_dict_counter+=1
