@@ -7,11 +7,11 @@ Created on Fri Mar 15 22:08:58 2024
 @author: Zac Scurlock
 """
 from collections import Counter
+from bisect import bisect_right
+import pandas as pd
 import numpy as np
-from itertools import zip_longest, islice
-from bisect import bisect_left, bisect_right
 import gzip
-
+import json
 def multi_open(file_path):
     return gzip.open(file_path, 'rt') if file_path.endswith('.gz') else open(file_path, 'r')
 
@@ -508,22 +508,17 @@ def process_chunk(
         subject_seq=[]
         
         for actual ,num in enumerate(read_ind):
-            subject_seq.append(ref_seq[space_pos[num - 1] : space_pos[num] - 1])
-            #if ref_seq[space_pos[num - 1] : space_pos[num] - 1] != ref_dict[ids[actual]]:
-            #    print('NOT MATCHING', key, ref_ids[actual])
-                
+            subject_seq.append(ref_seq[space_pos[num - 1] : space_pos[num] - 1])               
         
-        #names = []
         int_name = [x for x in ids]
         if mirna_flag:
             orient=[]
             newlist=[]
             for i in range(len(ids)):
-            
-                #id_counter+=1
+
             #Remove matches in middle of miRNA hairpins
-                min_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) - 4.5
-                max_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) + 4.5
+                min_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) - 2.0
+                max_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) + 0.0
                 if not (main_pos[i] > min_bound) or not (main_pos[i] < max_bound):
                     newlist.append(ids[i])
                     
@@ -549,3 +544,68 @@ def process_chunk(
             test_dict.update(res_dict[key]*integer_dict[key])
         continue
     return test_dict,res_dict
+
+def merge_results(all_res):
+    df = []
+    for x in range(len(all_res)):
+        if len(all_res[x][0]) > 0:
+            df.append(all_res[x][0])
+            
+    final = df[0]
+    for merge in range(1, len(df)):
+        final.update(df[merge])
+    return final
+
+def create_log(all_res, sequence_dict, out_path):
+    log = {}
+    for up in range(len(all_res)):
+        log.update(all_res[up][1])
+
+    new_log = {}
+    for k,v in log.items():
+        all_read = sequence_dict[k]
+        for read in all_read:
+            new_log[read] = v
+    # Creating read-alignment log file
+    with open(str(out_path) + "_pymira_log.json", "w") as fh:
+        json.dump(new_log, fh, indent=2)
+    print(f"PymiRa Log file written to {out_path}" + "_pymira_log.json")
+
+def generate_results_files(final, input_file_name,ref_file_name,outpath,mirna_flag,mis_5p,mis_3p, input_dict):
+    
+    results = pd.DataFrame.from_dict(final, orient="index")
+    results.rename(columns={0: "Count"}, inplace=True)
+    results = results.sort_values(by=["Count"], ascending=False)
+    before_total = results.Count.sum()
+    results.Count = results.Count.astype(int)
+    kept = results[results.Count > 0]
+    removed = results[results.Count<=0]
+    after_total = kept.Count.sum()
+    final_row = pd.DataFrame({"Count": after_total}, index=["TotalCount"])
+    kept = pd.concat([kept, final_row])
+    kept.index.name = input_file_name.split("/")[-1]
+    kept.to_csv(str(outpath + "_pymira_counts.txt"))
+    
+    align_sum = {'PymiRa Alignment Summary':{'Parameters': {
+        'input_file':input_file_name,
+        'ref_file':ref_file_name,
+        'out_path':outpath,
+        'miRNA alignment?':mirna_flag,
+        'mismatches_5p':int(mis_5p),
+        'mismatches_3p':int(mis_3p)},
+        'Summary': {
+            'Total reads processed':int(len(input_dict)),
+            'Number of reads aligned (Pre-filtered)':int(before_total),
+            #has to be the Total number before filtering}
+            'Number of reads aligned (Post-filtered)':int(after_total),
+            'Proportion of reads aligned (%)':round((after_total/len(input_dict) * 100),2),
+            'Filtered reads from low counts (< 1)':int(before_total-after_total),
+            'Alignments filtered out from low counts (< 1)':removed.index.tolist()
+
+        }}}
+
+    with open(str(outpath + '_pymira_alignment_summary.json'), 'w') as fh:
+        json.dump(align_sum, fh, indent=2)
+        
+    print(f"PymiRa Alignment summary written to {outpath}" + "_pymira_alignment_summary.json")
+    print(f"PymiRa Counts file written to {outpath}" + "_pymira_counts.txt")

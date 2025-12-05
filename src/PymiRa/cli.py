@@ -4,8 +4,6 @@ import sys
 import re
 from functools import partial
 import multiprocessing
-import pandas as pd
-import json
 from collections import defaultdict
 
 
@@ -108,42 +106,12 @@ def main():
         res_res = pool.map(process_chunk2, container)
 
     # Process result
-    emp = []
-    for x in range(len(res_res)):
-        if len(res_res[x][0]) > 0:
-            emp.append(res_res[x][0])
     try:
-        final = emp[0]
-        for merge in range(1, len(emp)):
-            final.update(emp[merge])
-    
-        log = {}
-        for up in range(len(res_res)):
-            log.update(res_res[up][1])
-    
-        new_log = {}
-        for k,v in log.items():
-            all_read = seq_dict[k]
-            for read in all_read:
-                new_log[read] = v
-        # Creating read-alignment log file
-        with open(str(args.out_path) + "_pymira_log.json", "w") as fh:
-            json.dump(new_log, fh, indent=2)
-    
-        # Creating and formatting counts table
-        results = pd.DataFrame.from_dict(final, orient="index")
-        results.rename(columns={0: "Count"}, inplace=True)
-        results = results.sort_values(by=["Count"], ascending=False)
-        results.Count = results.Count.astype(int)
-        results = results[results.Count > 0]
-        total = results.Count.sum()
-        final_row = pd.DataFrame({"Count": total}, index=["TotalCount"])
-        results = pd.concat([results, final_row])
-        results.index.name = args.input_file.split("/")[-1]
-        results.to_csv(str(args.out_path + "_pymira_counts.txt"))
-        
-        print(f"Counts and log files written to {args.out_path}" + "_pymira_counts.txt")
-        print(f"Counts and log files written to {args.out_path}" + "_pymira_log.json")
+        final = pym.merge_results(res_res)
+        pym.create_log(res_res,seq_dict,args.out_path)
+        pym.generate_results_files(final, args.input_file, args.ref_file, args.out_path,
+                                   args.mirna, args.mismatches_5p, args.mismatches_3p,input_file_dict)
+        print('Complete')
     except IndexError:
         print('No read sequences were aligned in <input_file> file so there are no results.')
         
