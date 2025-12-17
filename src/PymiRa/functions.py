@@ -599,7 +599,7 @@ def generate_results_files(
     final_row = pd.DataFrame({"Count": after_total}, index=["TotalCount"])
     kept = pd.concat([kept, final_row])
     kept.index.name = input_file_name.split("/")[-1]
-    kept.to_csv(str(outpath + "_pymira_counts.txt"))
+    kept.to_csv(str(outpath + "_pymira_counts.csv"))
 
     align_sum = {
         "PymiRa Alignment Summary": {
@@ -631,4 +631,4 @@ def generate_results_files(
         f"PymiRa Alignment summary written to {outpath}"
         + "_pymira_alignment_summary.json"
     )
-    print(f"PymiRa Counts file written to {outpath}" + "_pymira_counts.txt")
+    print(f"PymiRa Counts file written to {outpath}" + "_pymira_counts.csv")
