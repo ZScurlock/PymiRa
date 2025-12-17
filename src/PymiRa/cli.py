@@ -4,50 +4,78 @@ import sys
 import re
 from functools import partial
 import multiprocessing
-import pandas as pd
-import json
+from collections import defaultdict
 
 
-def main():
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument("--self-test", action="store_true")
+    pre_args, remaining = pre_parser.parse_known_args(argv)
+
+    if pre_args.self_test:
+        from PymiRa.self_test import test_pymira
+
+        ok, results = test_pymira.run_self_test()
+        for name, passed, msg in results:
+            print(f"[{name}] {'PASS' if passed else 'FAIL'}:{msg}")
+        if ok:
+            print("Self-test passed")
+            return 0
+        else:
+            print("Self-test FAILED")
+            return 1
+
     parser = argparse.ArgumentParser(
-        description="Align an <input_fasta> against a <reference_fasta> file, to obtain a counts and log file."
+        description="Align an <input_file> against a <reference_file> allowing up to <mismatches_3p> mismatches at the 3' end of each read. Default is 2."
     )
     parser.add_argument(
-        "--input_fasta",
+        "--input_file",
         type=str,
         required=True,
-        help="An input FASTA file to identify small RNAs from.",
+        help="Input sequence file (FASTA / FASTQ, optionally gzipped) to identify small RNAs from.",
     )
     parser.add_argument(
-        "--ref_fasta",
+        "--ref_file",
         type=str,
         required=True,
-        help="A reference FASTA file used to align the <input_fasta> against e.g. miRBase hairpin file for microRNA identification",
+        help="Reference sequence file (FASTA / FASTQ, optionally gzipped) used to align the <input_file> against e.g. miRBase hairpin file for microRNA identification",
     )
     parser.add_argument(
         "--out_path",
         type=str,
         required=True,
-        help="The dir and basename of the output files",
+        help="The dir and basename of the output files e.g. {BASENAME}_pymira_counts.txt",
     )
     parser.add_argument(
         "--num_proc",
         type=int,
-        default=4,
-        help="Number of processors to be used. Default is 4.",
+        default=1,
+        help="Number of processors to be used. Default is 1.",
     )
 
     parser.add_argument(
-        "--mismatches_5p",
-        type=int,
-        default=0,
-        help="Number of mismatches allowed in the 5 prime part of a read (First 55 percent). Default is 0, change at your own discretion",
+        "--mirna",
+        action="store_true",
+        default=False,
+        help="""For use with mature miRNA sequences.\n Restricts alignments to the ends of a precursor (preventing alignment of isomiR / degradation products).
+        Adds '-5p' / '-3p' notation to miRNA alignments. Default is off.
+        """,
     )
+
     parser.add_argument(
         "--mismatches_3p",
         type=int,
         default=2,
         help="Number of mismatches allowed in the 3 prime part of a read (Last 45 percent). Default is 2.",
+    )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        default=False,
+        help="Run a quick test to verify installation and correct operation.",
     )
 
     if len(sys.argv) == 1:
@@ -57,65 +85,62 @@ def main():
     args = parser.parse_args()
 
     # Import and format the FASTA
-    input_file_dict, input_file_ids = pym.parse_fasta(args.input_fasta)
-    container = pym.split_fasta_dict(input_file_dict, int(args.num_proc))
+    print(f"Importing input_file: {args.input_file}")
+    input_file_dict, input_file_ids = pym.upload_file(args.input_file)
+
+    seq_dict = defaultdict(list)
+    for name, seq in input_file_dict.items():
+        seq_dict[seq].append(name)
+
+    int_dict = {k: len(v) for k, v in seq_dict.items()}
+
+    container = pym.split_fasta_dict(int_dict, int(args.num_proc))
 
     # Import and format the reference sequence (miRBase)
-    ref_dict, ref_ids = pym.parse_fasta(args.ref_fasta)
+    print(f"Importing reference file: {args.ref_file}")
+    ref_dict, ref_ids = pym.upload_file(args.ref_file)
 
     print("Generating reference..")
     ref = [" ".join(list(ref_dict.values()))]
-    del ref_dict
     clean_ref = re.sub(r"[^a-zA-Z\s]", "", str(ref))
+    clean_ref += " "
+    clean_ref = " " + clean_ref
 
     # BWT creation
     letters, bwt, lf_map, count, s_array = pym.generate_all(clean_ref)
     required = [letters, bwt, lf_map, count, s_array]
 
     # Alignment
+    print("Running alignment..")
     process_chunk2 = partial(
         pym.process_chunk,
         ref_seq=clean_ref,
         ids_ref=ref_ids,
         bwt_data=required,
-        mismatches_5p=args.mismatches_5p,
-        mismatches_3p=args.mismatches_3p
+        integer_dict=int_dict,
+        mismatches_3p=args.mismatches_3p,
+        mirna_flag=args.mirna,
     )
     with multiprocessing.Pool(processes=args.num_proc) as pool:
         res_res = pool.map(process_chunk2, container)
 
     # Process result
-    emp = []
-    for x in range(len(res_res)):
-        if len(res_res[x][0]) > 0:
-            emp.append(res_res[x][0])
     try:
-        final = emp[0]
-        for merge in range(1, len(emp)):
-            final.update(emp[merge])
-    
-        log = {}
-        for up in range(len(res_res)):
-            log.update(res_res[up][1])
-    
-        # Creating read-alignment log file
-        with open(str(args.out_path) + "_FIX_pymira_log.json", "w") as fh:
-            json.dump(log, fh, indent=2)
-    
-        # Creating and formatting counts table
-        results = pd.DataFrame.from_dict(final, orient="index")
-        results.rename(columns={0: "Count"}, inplace=True)
-        results = results.sort_values(by=["Count"], ascending=False)
-        results.Count = results.Count.astype(int)
-        results = results[results.Count > 0]
-        total = results.Count.sum()
-        final_row = pd.DataFrame({"Count": total}, index=["TotalCount"])
-        results = pd.concat([results, final_row])
-        results.index.name = args.input_fasta.split("/")[-1]
-        results.to_csv(str(args.out_path + "_FIX_pymira_counts.txt"))
-
+        final = pym.merge_results(res_res)
+        pym.create_log(res_res, seq_dict, args.out_path)
+        pym.generate_results_files(
+            final,
+            args.input_file,
+            args.ref_file,
+            args.out_path,
+            args.mirna,
+            args.mismatches_3p,
+            input_file_dict,
+        )
+        print("Complete")
     except IndexError:
-        print('No miRNAs were found in your <input_fasta> file so there are no results.')
-        
+        print("No read sequences were aligned in <input_file> so there are no results.")
+
+
 if __name__ == "__main__":
     main()
