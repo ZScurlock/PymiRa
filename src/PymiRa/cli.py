@@ -28,7 +28,7 @@ def main(argv=None):
     
     
     parser = argparse.ArgumentParser(
-        description="Align an <input_file> against a <reference_fasta> file, to obtain sequence counts and log file."
+        description="Align an <input_file> against a <reference_file> allowing up to <mismatches_3p> mismatches at the 3' end of each read. Default is 2. Outputs sequence counts."
     )
     parser.add_argument(
         "--input_file",
@@ -46,13 +46,13 @@ def main(argv=None):
         "--out_path",
         type=str,
         required=True,
-        help="The dir and basename of the output files",
+        help="The dir and basename of the output files e.g. {BASENAME}_pymira_counts.txt",
     )
     parser.add_argument(
         "--num_proc",
         type=int,
-        default=4,
-        help="Number of processors to be used. Default is 4.",
+        default=1,
+        help="Number of processors to be used. Default is 1.",
     )
     
     parser.add_argument(
