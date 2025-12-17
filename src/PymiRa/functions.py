@@ -12,16 +12,24 @@ import pandas as pd
 import numpy as np
 import gzip
 import json
+
+
 def multi_open(file_path):
-    return gzip.open(file_path, 'rt') if file_path.endswith('.gz') else open(file_path, 'r')
+    return (
+        gzip.open(file_path, "rt")
+        if file_path.endswith(".gz")
+        else open(file_path, "r")
+    )
+
 
 def upload_file(file_path):
-    split_name = file_path.lower().split('.')
-    if ('fasta' in split_name) or ('fa' in split_name):
+    split_name = file_path.lower().split(".")
+    if ("fasta" in split_name) or ("fa" in split_name):
         return parse_fasta(file_path)
-    elif ('fastq' in split_name):
+    elif "fastq" in split_name:
         return parse_fastq(file_path)
-        
+
+
 def parse_fasta(file_path):
     """
     Imports a FASTA / FASTA.gz file and substitutes U bases for T bases.
@@ -48,12 +56,11 @@ def parse_fasta(file_path):
     return fasta_dict, list(fasta_dict.keys())
 
 
-
 def parse_fastq(file_path):
     """
     Imports a FASTQ / FASTQ.gz file and substitutes U bases for T bases.
     """
-    fastq_dict={}
+    fastq_dict = {}
     with multi_open(file_path) as file:
         while True:
             name = file.readline().rstrip()
@@ -62,7 +69,7 @@ def parse_fastq(file_path):
             seq = file.readline().rstrip().replace("U", "T")
             file.readline()
             file.readline()
-            
+
             fastq_dict[name[1:]] = seq
     return fastq_dict, list(fastq_dict.keys())
 
@@ -104,6 +111,7 @@ def int_keys_best(l):
     index = {v: i for i, v in enumerate(seen)}
     return [index[v] for v in l]
 
+
 def bwt_from_suffix(string, s_array=None):
     if s_array is None:
         s_array = suffix_array2(string)
@@ -129,11 +137,12 @@ def update(begin, end, letter, lf_map, counts, string_length):
     ending = counts[letter] + lf_map[letter][end]
     return (beginning, ending)
 
+
 def suffix_array2(s):
     n = len(s)
     k = 1
-    line = np.array(int_keys_best(s), dtype='int64')    
-    prev = np.zeros(n, dtype='int64')
+    line = np.array(int_keys_best(s), dtype="int64")
+    prev = np.zeros(n, dtype="int64")
     while line.max() < n - 1:
         prev[-k::] = -1
         prev[0:-k] = line[k::] + 1
@@ -142,31 +151,33 @@ def suffix_array2(s):
         _, line = np.unique(line, return_inverse=True)
     return line
 
-def lf_mapping_2(bwt,letters=None):
+
+def lf_mapping_2(bwt, letters=None):
     if letters is None:
-        letters=set(bwt)
-        
+        letters = set(bwt)
+
     n = len(bwt)
-    results_array = np.zeros((n+2,len(letters)),dtype='int64')
-    results_array_idx = {letter:i for i, letter in enumerate(letters)}
-    
-    counts_array=np.zeros(len(letters),dtype='int64')
-    
-    for idx,letter in enumerate(bwt):
+    results_array = np.zeros((n + 2, len(letters)), dtype="int64")
+    results_array_idx = {letter: i for i, letter in enumerate(letters)}
+
+    counts_array = np.zeros(len(letters), dtype="int64")
+
+    for idx, letter in enumerate(bwt):
         counts_array[results_array_idx[letter]] += 1
         results_array[idx] = counts_array
-        
-    results_array=results_array.T
-    results = {letter:results_array[i] for i, letter in enumerate(letters)}
-    
-    return(results)
+
+    results_array = results_array.T
+    results = {letter: results_array[i] for i, letter in enumerate(letters)}
+
+    return results
+
 
 def generate_all(input_string, s_array=None, eos="$"):
     letters = set(input_string)
     counts = count_occurences(input_string, letters)
 
     input_string += eos
-    
+
     if s_array is None:
         s_array = np.argsort(suffix_array2(input_string))
     bwt = bwt_from_suffix(input_string, s_array)
@@ -379,14 +390,20 @@ class DecimalCounter(Counter):
     1/N reads.
     """
 
-    def update_division(self, iterable,num=1):
+    def update_division(self, iterable, num=1):
         increment = num / len(iterable)
         for elem in iterable:
             self[elem] += increment
 
 
 def process_chunk(
-    input_dict, ref_seq, ids_ref, bwt_data, integer_dict, mirna_flag=False, mismatches_3p=2, 
+    input_dict,
+    ref_seq,
+    ids_ref,
+    bwt_data,
+    integer_dict,
+    mirna_flag=False,
+    mismatches_3p=2,
 ):
     """
 
@@ -403,7 +420,7 @@ def process_chunk(
     integer_dict : dict
         Dictionary with sequences as keys and integers as values (number of times the sequence is found in the file)
     mirna_flag : bool
-        Flag for to restrict miRNA alignments to either end of the hairpin sequence, adding either -5p / -3p notation. 
+        Flag for to restrict miRNA alignments to either end of the hairpin sequence, adding either -5p / -3p notation.
         The default is False.
     mismatches_3p : TYPE, optional
         DESCRIPTION. The default is 2.
@@ -427,24 +444,17 @@ def process_chunk(
             bwt_data=bwt_data,
         )
 
-    
     def _is_valid_res(v):
-       return (
-           isinstance(v, tuple)
-           and len(v) == 3
-           and bool(v[0])
-       )
-   
+        return isinstance(v, tuple) and len(v) == 3 and bool(v[0])
+
     # Removes reads with no hits
     res_dict = {k: v for k, v in res_dict.items() if _is_valid_res(v)}
-    
 
     # Locates the position of all spaces in the reference
-    arr = np.frombuffer(ref_seq.encode('ascii'), dtype=np.uint8)
-    space_pos = np.where(arr == ord(' '))[0]
-    space_pos +=1
-    
-    
+    arr = np.frombuffer(ref_seq.encode("ascii"), dtype=np.uint8)
+    space_pos = np.where(arr == ord(" "))[0]
+    space_pos += 1
+
     test_dict = DecimalCounter()
     # Refers the hit back to the reference sample
     for key in res_dict.copy():
@@ -475,9 +485,11 @@ def process_chunk(
 
             # Finds the value immediately greater than each main_pos value
             indices = [
-                bisect_right(np_pos_3p, np_main_pos[x]) - 1
-                if bisect_right(np_pos_3p, np_main_pos[x]) >= len(np_pos_3p)
-                else bisect_right(np_pos_3p, np_main_pos[x])
+                (
+                    bisect_right(np_pos_3p, np_main_pos[x]) - 1
+                    if bisect_right(np_pos_3p, np_main_pos[x]) >= len(np_pos_3p)
+                    else bisect_right(np_pos_3p, np_main_pos[x])
+                )
                 for x in range(len(np_main_pos))
             ]
             main_pos_2 = []
@@ -494,65 +506,67 @@ def process_chunk(
             if len(main_pos) < 1:
                 res_dict.pop(key)
                 continue
-        
-        # 
-        mask=np.isin(main_pos,space_pos)
-        main_pos[mask] +=1
-        
-        read_ind = np.unique(np.searchsorted(space_pos,main_pos,side='left'))
-        ids_ind = read_ind-1
-        
+
+        #
+        mask = np.isin(main_pos, space_pos)
+        main_pos[mask] += 1
+
+        read_ind = np.unique(np.searchsorted(space_pos, main_pos, side="left"))
+        ids_ind = read_ind - 1
+
         ids = [ids_ref[x] for x in ids_ind]
-        subject_seq=[]
-        
-        for actual ,num in enumerate(read_ind):
-            subject_seq.append(ref_seq[space_pos[num - 1] : space_pos[num] - 1])               
-        
+        subject_seq = []
+
+        for actual, num in enumerate(read_ind):
+            subject_seq.append(ref_seq[space_pos[num - 1] : space_pos[num] - 1])
+
         int_name = [x for x in ids]
         if mirna_flag:
-            orient=[]
-            newlist=[]
+            orient = []
+            newlist = []
             for i in range(len(ids)):
 
-            #Remove matches in middle of miRNA hairpins
-                min_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) - 2.0
-                max_bound = (len(subject_seq[i])/2 + space_pos[read_ind[i]-1]) + 0.0
+                # Remove matches in middle of miRNA hairpins
+                min_bound = (len(subject_seq[i]) / 2 + space_pos[read_ind[i] - 1]) - 2.0
+                max_bound = (len(subject_seq[i]) / 2 + space_pos[read_ind[i] - 1]) + 0.0
                 if not (main_pos[i] > min_bound) or not (main_pos[i] < max_bound):
                     newlist.append(ids[i])
-                    
-                    #Add orientations
-                    if main_pos[i] + 9 < space_pos[read_ind[i]-1] + (
+
+                    # Add orientations
+                    if main_pos[i] + 9 < space_pos[read_ind[i] - 1] + (
                         len(subject_seq[i]) / 2
                     ):
                         orient.append("-5p")
                     else:
                         orient.append("-3p")
-                        
+
             if len(newlist) == 0:
                 res_dict.pop(key)
                 continue
-            
+
             int_name = [ids[n].split(" MI")[0] + orient[n] for n in range(len(newlist))]
-        
+
         res_dict[key] = int_name
-        #res_dict_counter+=1
+        # res_dict_counter+=1
         if len(int_name) > 1:
-            test_dict.update_division(res_dict[key],integer_dict[key])
+            test_dict.update_division(res_dict[key], integer_dict[key])
         else:
-            test_dict.update(res_dict[key]*integer_dict[key])
+            test_dict.update(res_dict[key] * integer_dict[key])
         continue
-    return test_dict,res_dict
+    return test_dict, res_dict
+
 
 def merge_results(all_res):
     df = []
     for x in range(len(all_res)):
         if len(all_res[x][0]) > 0:
             df.append(all_res[x][0])
-            
+
     final = df[0]
     for merge in range(1, len(df)):
         final.update(df[merge])
     return final
+
 
 def create_log(all_res, sequence_dict, out_path):
     log = {}
@@ -560,7 +574,7 @@ def create_log(all_res, sequence_dict, out_path):
         log.update(all_res[up][1])
 
     new_log = {}
-    for k,v in log.items():
+    for k, v in log.items():
         all_read = sequence_dict[k]
         for read in all_read:
             new_log[read] = v
@@ -569,40 +583,52 @@ def create_log(all_res, sequence_dict, out_path):
         json.dump(new_log, fh, indent=2)
     print(f"PymiRa Log file written to {out_path}" + "_pymira_log.json")
 
-def generate_results_files(final, input_file_name,ref_file_name,outpath,mirna_flag,mis_3p, input_dict):
-    
+
+def generate_results_files(
+    final, input_file_name, ref_file_name, outpath, mirna_flag, mis_3p, input_dict
+):
+
     results = pd.DataFrame.from_dict(final, orient="index")
     results.rename(columns={0: "Count"}, inplace=True)
     results = results.sort_values(by=["Count"], ascending=False)
     before_total = results.Count.sum()
     results.Count = results.Count.astype(int)
     kept = results[results.Count > 0]
-    removed = results[results.Count<=0]
+    removed = results[results.Count <= 0]
     after_total = kept.Count.sum()
     final_row = pd.DataFrame({"Count": after_total}, index=["TotalCount"])
     kept = pd.concat([kept, final_row])
     kept.index.name = input_file_name.split("/")[-1]
     kept.to_csv(str(outpath + "_pymira_counts.txt"))
-    
-    align_sum = {'PymiRa Alignment Summary':{'Parameters': {
-        'input_file':input_file_name,
-        'ref_file':ref_file_name,
-        'out_path':outpath,
-        'miRNA alignment?':mirna_flag,
-        'mismatches_3p':int(mis_3p)},
-        'Summary': {
-            'Total reads processed':int(len(input_dict)),
-            'Number of reads aligned (Pre-filtered)':int(before_total),
-            #has to be the Total number before filtering}
-            'Number of reads aligned (Post-filtered)':int(after_total),
-            'Proportion of reads aligned (%)':round((after_total/len(input_dict) * 100),2),
-            'Filtered reads from low counts (< 1)':int(before_total-after_total),
-            'Alignments filtered out from low counts (< 1)':removed.index.tolist()
 
-        }}}
+    align_sum = {
+        "PymiRa Alignment Summary": {
+            "Parameters": {
+                "input_file": input_file_name,
+                "ref_file": ref_file_name,
+                "out_path": outpath,
+                "miRNA alignment?": mirna_flag,
+                "mismatches_3p": int(mis_3p),
+            },
+            "Summary": {
+                "Total reads processed": int(len(input_dict)),
+                "Number of reads aligned (Pre-filtered)": int(before_total),
+                # has to be the Total number before filtering}
+                "Number of reads aligned (Post-filtered)": int(after_total),
+                "Proportion of reads aligned (%)": round(
+                    (after_total / len(input_dict) * 100), 2
+                ),
+                "Filtered reads from low counts (< 1)": int(before_total - after_total),
+                "Alignments filtered out from low counts (< 1)": removed.index.tolist(),
+            },
+        }
+    }
 
-    with open(str(outpath + '_pymira_alignment_summary.json'), 'w') as fh:
+    with open(str(outpath + "_pymira_alignment_summary.json"), "w") as fh:
         json.dump(align_sum, fh, indent=2)
-        
-    print(f"PymiRa Alignment summary written to {outpath}" + "_pymira_alignment_summary.json")
+
+    print(
+        f"PymiRa Alignment summary written to {outpath}"
+        + "_pymira_alignment_summary.json"
+    )
     print(f"PymiRa Counts file written to {outpath}" + "_pymira_counts.txt")
