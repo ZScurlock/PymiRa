@@ -6,8 +6,27 @@ from functools import partial
 import multiprocessing
 from collections import defaultdict
 
-
-def main():
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+    
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument('--self-test', action="store_true")    
+    pre_args,remaining = pre_parser.parse_known_args(argv)
+    
+    if pre_args.self_test:
+        from PymiRa.self_test import test_pymira
+        ok, results = test_pymira.run_self_test()
+        for name, passed, msg in results:
+            print(f"[{name}] {'PASS' if passed else 'FAIL'}:{msg}")
+        if ok:
+            print('Self-test passed')
+            return 0
+        else:
+            print('Self-test FAILED')
+            return 1
+    
+    
     parser = argparse.ArgumentParser(
         description="Align an <input_file> against a <reference_fasta> file, to obtain sequence counts and log file."
     )
@@ -44,25 +63,24 @@ def main():
         Adds '-5p' / '-3p' notation to miRNA alignments.Default is off.
         """
         )
-    parser.add_argument(
-        "--mismatches_5p",
-        type=int,
-        default=0,
-        help="Number of mismatches allowed in the 5 prime part of a read (First 55 percent). Default is 0, change at your own discretion",
-    )
+   
     parser.add_argument(
         "--mismatches_3p",
         type=int,
         default=2,
         help="Number of mismatches allowed in the 3 prime part of a read (Last 45 percent). Default is 2.",
     )
-
+    parser.add_argument(
+        "--self-test", action="store_true",default=False,
+        help="Run a quick test to verify installation and correct operation")
+    
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
         sys.exit(1)
 
     args = parser.parse_args()
-
+    
+        
     # Import and format the FASTA
     print(f"Importing input_file: {args.input_file}")
     input_file_dict, input_file_ids = pym.upload_file(args.input_file)
@@ -81,7 +99,6 @@ def main():
 
     print("Generating reference..")
     ref = [" ".join(list(ref_dict.values()))]
-#    del ref_dict
     clean_ref = re.sub(r"[^a-zA-Z\s]", "", str(ref))
     clean_ref += ' '
     clean_ref = ' ' + clean_ref
@@ -98,7 +115,6 @@ def main():
         ids_ref = ref_ids,
         bwt_data = required,
         integer_dict = int_dict,
-        mismatches_5p = args.mismatches_5p,
         mismatches_3p = args.mismatches_3p,
         mirna_flag = args.mirna
     )
@@ -110,10 +126,10 @@ def main():
         final = pym.merge_results(res_res)
         pym.create_log(res_res,seq_dict,args.out_path)
         pym.generate_results_files(final, args.input_file, args.ref_file, args.out_path,
-                                   args.mirna, args.mismatches_5p, args.mismatches_3p,input_file_dict)
+                                   args.mirna, args.mismatches_3p,input_file_dict)
         print('Complete')
     except IndexError:
-        print('No read sequences were aligned in <input_file> file so there are no results.')
+        print('No read sequences were aligned in <input_file> so there are no results.')
         
 if __name__ == "__main__":
     main()

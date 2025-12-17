@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 PymiRa - Version 1
-Created on Fri Mar 15 22:08:58 2024
+Created during 2024-25
 
 @author: Zac Scurlock
 """
@@ -185,7 +185,6 @@ def find_all(string, pattern):
 def bwt_align(
     search_string,
     input_string,
-    mismatches_5p=0,
     mismatches_3p=2,
     bwt_data=None,
     s_array=None,
@@ -199,9 +198,6 @@ def bwt_align(
         Read to align.
     input_string : str
         Reference sequence to align to
-    mismatches_5p : TYPE, optional
-        Number of mismatches permitted at the 5` end.
-        (55% of read) The default is 0.
     mismatches_3p : TYPE, optional
         Number of mismatches permitted at the 3` end.
         (45% of read) The default is 2.
@@ -263,7 +259,7 @@ def bwt_align(
                             search_string=search_string_75,
                             begin=0,
                             end=len(bwt) - 1,
-                            mismatches=mismatches_5p,
+                            mismatches=0,
                         )
                     ]
 
@@ -288,14 +284,14 @@ def bwt_align(
                                 length,
                             )
                             if begin_long > end_long:
-                                return []
+                                continue
 
                             if begin_long <= end_long:
                                 if len(search_long) == 0:
                                     results.extend(s_array[begin_long : end_long + 1])
 
                                 else:
-                                    miss = p.mismatches
+                                    miss = long_read.mismatches
                                     if letter_long != last_long:
                                         miss = max(0, long_read.mismatches - 1)
                                     fuz_5p.append(
@@ -390,7 +386,7 @@ class DecimalCounter(Counter):
 
 
 def process_chunk(
-    input_dict, ref_seq, ids_ref, bwt_data, integer_dict, mirna_flag=False, mismatches_5p=0, mismatches_3p=2, 
+    input_dict, ref_seq, ids_ref, bwt_data, integer_dict, mirna_flag=False, mismatches_3p=2, 
 ):
     """
 
@@ -409,8 +405,6 @@ def process_chunk(
     mirna_flag : bool
         Flag for to restrict miRNA alignments to either end of the hairpin sequence, adding either -5p / -3p notation. 
         The default is False.
-    mismatches_5p : TYPE, optional
-        DESCRIPTION. The default is 0.
     mismatches_3p : TYPE, optional
         DESCRIPTION. The default is 2.
 
@@ -429,14 +423,21 @@ def process_chunk(
         res_dict[i] = bwt_align(
             i,
             ref_seq,
-            mismatches_5p=mismatches_5p,
             mismatches_3p=mismatches_3p,
             bwt_data=bwt_data,
         )
 
-
+    
+    def _is_valid_res(v):
+       return (
+           isinstance(v, tuple)
+           and len(v) == 3
+           and bool(v[0])
+       )
+   
     # Removes reads with no hits
-    res_dict = {k: v for k, v in res_dict.items() if any(v)}
+    res_dict = {k: v for k, v in res_dict.items() if _is_valid_res(v)}
+    
 
     # Locates the position of all spaces in the reference
     arr = np.frombuffer(ref_seq.encode('ascii'), dtype=np.uint8)
@@ -451,12 +452,10 @@ def process_chunk(
         if (len(res) > 0) & (len(res[0]) != 0):
             # Removes reads with 3 mismatches in main part of read.
             if (res[2] == 0) & (len(res[0]) >= 1) & (not bool(res[1])):
-                #Unsuccess_dict.append(key) - Reason - too many mismatches in 5' end of read.
                 res_dict.pop(key)
                 continue
         else:
             res_dict.pop(key)
-            #Unsuccess_dict.append(key) - Reason - should not be here
             continue
 
         # Mismatch filter is 0 as mismatch and 1 as no mismatch
@@ -472,7 +471,6 @@ def process_chunk(
             np_pos_3p = np_pos_3p[np_pos_3p >= np_main_pos.min()]
             if len(np_pos_3p) == 0:
                 res_dict.pop(key)
-                #Unsuccess_dict.append(key) - Reason - no valid 3p end alignment
                 continue
 
             # Finds the value immediately greater than each main_pos value
@@ -571,7 +569,7 @@ def create_log(all_res, sequence_dict, out_path):
         json.dump(new_log, fh, indent=2)
     print(f"PymiRa Log file written to {out_path}" + "_pymira_log.json")
 
-def generate_results_files(final, input_file_name,ref_file_name,outpath,mirna_flag,mis_5p,mis_3p, input_dict):
+def generate_results_files(final, input_file_name,ref_file_name,outpath,mirna_flag,mis_3p, input_dict):
     
     results = pd.DataFrame.from_dict(final, orient="index")
     results.rename(columns={0: "Count"}, inplace=True)
@@ -591,7 +589,6 @@ def generate_results_files(final, input_file_name,ref_file_name,outpath,mirna_fl
         'ref_file':ref_file_name,
         'out_path':outpath,
         'miRNA alignment?':mirna_flag,
-        'mismatches_5p':int(mis_5p),
         'mismatches_3p':int(mis_3p)},
         'Summary': {
             'Total reads processed':int(len(input_dict)),
