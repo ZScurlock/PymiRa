@@ -123,7 +123,7 @@ Complete
 
 ```
 
-Looking at the `example_output_pymira_counts.txt`, we see we get counts at the reference hairpin level.
+Looking at the `example_output_pymira_counts.txt`, we get counts at the reference hairpin level.
 ```
 example_input.fa,Count
 hsa-mir-520c MI0003158 Homo sapiens miR-520c stem-loop,2
@@ -132,7 +132,7 @@ hsa-mir-598 MI0003610 Homo sapiens miR-598 stem-loop,2
 hsa-mir-10396b MI0033426 Homo sapiens miR-10396b stem-loop,2
 ```
 
-If want to get mature miRNA counts and to restrict alignment of reads to either end of the reference hairpin, we can use the `--mirna` flag.
+If we want mature miRNA counts and to restrict alignment of reads to either end of the reference hairpin, we can use the `--mirna` flag.
 
 ```
 example_input.fa,Count
