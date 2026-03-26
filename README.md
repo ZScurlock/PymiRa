@@ -1,10 +1,3 @@
-### Temporary Notice
-This code is provided to journal reviewers and editors for the sole purpose of evaluating the associated manuscript. 
-All rights are reserved by the author(s). 
-No permission is granted to copy, distribute, modify, or otherwise use this code for any purpose beyond peer review.
- An open-source license (MIT) will be applied upon formal publication of the manuscript, at which point broader use will be permitted.
-
-
 # PymiRa - A rapid and accurate classification tool for small non-coding RNAs (sncRNA), including microRNAs
 PymiRa utilises a Burrows-Wheeler transformation algorithm to rapidly identify short reads against a reference FASTA file, written in Python.
 
@@ -148,7 +141,7 @@ hsa-mir-10396b-3p,1
 
 
 ## Citation
-
+Scurlock ZGL, Scarpini CG, Coleman N, Murray MJ, Enright AJ. PymiRa: A rapid and accurate classification tool for small non-coding RNAs, including microRNAs. PLOS Comput Biol. 2026 Mar 26;22(3):e1014114. doi:10.1371/journal.pcbi.1014114
 
 
 
