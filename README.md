@@ -4,7 +4,8 @@ PymiRa utilises a Burrows-Wheeler transformation algorithm to rapidly identify s
 This can be applied to identify different types of small non-coding RNAs by changing the reference FASTA file sequences are aligned to e.g. for microRNA identification (miRNAs), 
 the miRNA hairpin FASTA file derived from miRBase can be used.
 
-
+Manuscript can be found here:
+https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1014114
 # Installation
 `pip install git+https://github.com/ZScurlock/PymiRa.git`
 
