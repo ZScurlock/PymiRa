@@ -28,9 +28,10 @@ def main(argv=None):
             print("Self-test FAILED")
             return 1
 
+    
     parser = argparse.ArgumentParser(
-        description="Align an <input_file> against a <reference_file> allowing up to <mismatches_3p> mismatches at the 3' end of each read. Default is 2."
-    )
+        description="Align an <input_file> against a <reference_file> allowing up to <mismatches_3p> mismatches at the 3' end of each read. Default is 2.\n\n © 2026 Zac Scurlock | zs395@cam.ac.uk | Apache 2.0", formatter_class=argparse.RawTextHelpFormatter)
+
     parser.add_argument(
         "--input_file",
         type=str,
