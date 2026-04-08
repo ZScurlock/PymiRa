@@ -1,17 +1,11 @@
-### Temporary Notice
-This code is provided to journal reviewers and editors for the sole purpose of evaluating the associated manuscript. 
-All rights are reserved by the author(s). 
-No permission is granted to copy, distribute, modify, or otherwise use this code for any purpose beyond peer review.
- An open-source license (MIT) will be applied upon formal publication of the manuscript, at which point broader use will be permitted.
-
-
 # PymiRa - A rapid and accurate classification tool for small non-coding RNAs (sncRNA), including microRNAs
 PymiRa utilises a Burrows-Wheeler transformation algorithm to rapidly identify short reads against a reference FASTA file, written in Python.
 
 This can be applied to identify different types of small non-coding RNAs by changing the reference FASTA file sequences are aligned to e.g. for microRNA identification (miRNAs), 
 the miRNA hairpin FASTA file derived from miRBase can be used.
 
-
+Manuscript can be found here:
+https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1014114
 # Installation
 `pip install git+https://github.com/ZScurlock/PymiRa.git`
 
@@ -123,7 +117,7 @@ Complete
 
 ```
 
-Looking at the `example_output_pymira_counts.txt`, we see we get counts at the reference hairpin level.
+Looking at the `example_output_pymira_counts.txt`, we get counts at the reference hairpin level.
 ```
 example_input.fa,Count
 hsa-mir-520c MI0003158 Homo sapiens miR-520c stem-loop,2
@@ -132,7 +126,7 @@ hsa-mir-598 MI0003610 Homo sapiens miR-598 stem-loop,2
 hsa-mir-10396b MI0033426 Homo sapiens miR-10396b stem-loop,2
 ```
 
-If want to get mature miRNA counts and to restrict alignment of reads to either end of the reference hairpin, we can use the `--mirna` flag.
+If we want mature miRNA counts and to restrict alignment of reads to either end of the reference hairpin, we can use the `--mirna` flag.
 
 ```
 example_input.fa,Count
@@ -148,7 +142,7 @@ hsa-mir-10396b-3p,1
 
 
 ## Citation
-
+Scurlock ZGL, Scarpini CG, Coleman N, Murray MJ, Enright AJ. PymiRa: A rapid and accurate classification tool for small non-coding RNAs, including microRNAs. PLOS Comput Biol. 2026 Mar 26;22(3):e1014114. doi:10.1371/journal.pcbi.1014114
 
 
 
